@@ -330,25 +330,43 @@ def edit_task(task_id):
 def today_page():
     conn = get_db()
     today_str = date.today().isoformat()
-    members   = [dict(m) for m in conn.execute('SELECT * FROM members ORDER BY sort_order, id')]
-    tasks     = [dict(t) for t in conn.execute('SELECT * FROM chores WHERE active=1 ORDER BY sort_order, id').fetchall()]
+    members = [dict(m) for m in conn.execute('SELECT * FROM members ORDER BY sort_order, id')]
+    tasks   = [dict(t) for t in conn.execute('SELECT * FROM chores WHERE active=1 ORDER BY sort_order, id').fetchall()]
     raw_claims = conn.execute('''
-        SELECT dc.*, c.name as task_name, c.icon as task_icon, c.points as task_points,
-               m.name as member_name, m.avatar as member_avatar, m.color as member_color
+        SELECT dc.*, c.name as task_name, c.icon as task_icon, c.points as task_points
         FROM daily_claims dc
         JOIN chores c ON dc.task_id = c.id
-        JOIN members m ON dc.member_id = m.id
         WHERE dc.date = ?
-        ORDER BY m.sort_order, m.id, dc.created_at
+        ORDER BY c.sort_order, c.id, dc.created_at
     ''', (today_str,)).fetchall()
-    claims_by_member = {}
+
+    # Unique task rows in display order
+    seen_tasks = {}
+    task_rows  = []
     for r in raw_claims:
-        mid = r['member_id']
-        claims_by_member.setdefault(mid, []).append(dict(r))
+        tid = r['task_id']
+        if tid not in seen_tasks:
+            seen_tasks[tid] = {'task_id': tid, 'task_name': r['task_name'],
+                               'task_icon': r['task_icon'], 'task_points': r['task_points']}
+            task_rows.append(seen_tasks[tid])
+
+    # cells[task_id][member_id] = claim_dict
+    cells = {}
+    for r in raw_claims:
+        tid, mid = r['task_id'], r['member_id']
+        cells.setdefault(tid, {})[mid] = dict(r)
+
+    # Earned points per member (completed claims only)
+    member_totals = {m['id']: 0 for m in members}
+    for r in raw_claims:
+        if r['completed']:
+            member_totals[r['member_id']] = member_totals.get(r['member_id'], 0) + r['task_points']
+
     conn.close()
     return render_template('today.html',
         members=members, tasks=tasks,
-        claims_by_member=claims_by_member,
+        task_rows=task_rows, cells=cells,
+        member_totals=member_totals,
         today=date.today(), today_str=today_str,
         goal_units=GOAL_UNITS)
 

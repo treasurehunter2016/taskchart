@@ -5,59 +5,135 @@
 {% block head %}
 <style>
 .today-header {
-    padding: 56px 20px 4px;
+    padding: 56px 20px 12px;
     display: flex; align-items: flex-end; justify-content: space-between;
 }
 .today-title    { font-size: 37px; font-weight: 700; }
 .today-date-sub { font-size: 17px; color: var(--text3); margin-top: 2px; }
 
-/* Claim button (primary FAB-style at top) */
 .claim-fab {
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 6px;
     background: var(--accent); color: #fff;
     border: none; border-radius: 22px;
-    font-size: 18px; font-weight: 700; padding: 12px 20px;
+    font-size: 17px; font-weight: 700; padding: 11px 18px;
     cursor: pointer; box-shadow: 0 4px 16px var(--shadow);
-    transition: opacity .15s;
+    white-space: nowrap; flex-shrink: 0;
 }
 .claim-fab:active { opacity: .75; }
 
-/* Claim card */
-.claim-card {
-    display: flex; align-items: flex-start; gap: 12px;
-    padding: 14px 16px; border-bottom: 1px solid var(--border);
-    transition: background .12s;
+/* ── Grid ── */
+.grid-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 16px 16px;
+    border-radius: 14px;
+    box-shadow: 0 1px 4px var(--shadow);
 }
-.claim-card:last-child { border-bottom: none; }
-.claim-card.done { opacity: .55; }
-.claim-info     { flex: 1; min-width: 0; }
-.claim-name     { font-size: 18px; font-weight: 600; }
-.claim-goal     { font-size: 14px; color: var(--text3); margin-top: 2px; }
-.claim-progress { margin-top: 8px; display: flex; align-items: center; gap: 8px; }
-.claim-prog-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--bg3); overflow: hidden; }
-.claim-prog-fill{ height: 100%; border-radius: 3px; background: var(--accent); transition: width .3s; }
-.claim-prog-txt { font-size: 13px; color: var(--text3); white-space: nowrap; }
-.claim-actions  { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-.claim-btn {
-    padding: 5px 12px; border-radius: 12px; border: none;
-    font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .15s;
+.today-grid {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+    background: var(--bg2);
+    border-radius: 14px;
+    overflow: hidden;
 }
-.claim-btn:active { opacity: .7; }
-.claim-btn-update { background: var(--accent); color: #fff; }
-.claim-btn-done   { background: var(--green);  color: #fff; }
-.claim-btn-undone { background: var(--bg4);    color: var(--text); }
-.claim-btn-cal    { background: var(--bg3);    color: var(--text3); }
-.claim-btn-remove { background: none; color: var(--red); font-size: 18px; padding: 4px; }
 
-.member-section-label {
-    display: flex; align-items: center; gap: 8px;
-    padding: 14px 20px 6px;
+/* Header row */
+.today-grid thead { background: var(--bg3); }
+.col-task {
+    width: 148px; min-width: 130px;
+    text-align: left; padding: 10px 12px;
+    font-size: 13px; font-weight: 700; color: var(--text3);
+    text-transform: uppercase; letter-spacing: .4px;
+    border-bottom: 1px solid var(--border);
+}
+.col-member {
+    min-width: 96px; text-align: center;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--border);
+    border-left: 1px solid var(--border);
+}
+.member-head-avatar { font-size: 26px; line-height: 1; }
+.member-head-name   { font-size: 13px; font-weight: 700; margin-top: 2px; }
+
+/* Task rows */
+.today-grid tbody tr { background: var(--bg2); }
+.today-grid tbody tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+
+.task-cell {
+    padding: 10px 12px;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+}
+.task-cell-inner { display: flex; align-items: center; gap: 8px; }
+.task-icon-sm    { font-size: 22px; flex-shrink: 0; line-height: 1; }
+.task-cell-name  { font-size: 15px; font-weight: 600; line-height: 1.2; }
+.task-cell-pts   { font-size: 12px; color: var(--text3); margin-top: 1px; }
+
+/* Check cell */
+.check-cell {
+    text-align: center; padding: 8px 4px;
+    border-left: 1px solid var(--border);
+    vertical-align: middle;
+}
+.cell-btn {
+    display: inline-flex; flex-direction: column; align-items: center; gap: 3px;
+    background: none; border: none; cursor: pointer;
+    min-width: 72px; padding: 4px 6px; border-radius: 10px;
+    transition: background .15s;
+}
+.cell-btn:active { background: var(--bg3); }
+
+.cell-check {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all .2s;
+}
+.cell-check.unchecked {
+    border: 2.5px solid var(--check-border);
+    background: transparent;
+}
+[data-theme="green"] .cell-check.unchecked { border-color: var(--accent); }
+.cell-check.done {
+    background: var(--check-bg);
+    border: 2.5px solid var(--check-bg);
+}
+.cell-check.done::after { content: '✓'; color: var(--check-fg); font-size: 19px; font-weight: 800; }
+
+.cell-pts-label { font-size: 12px; color: var(--text3); white-space: nowrap; }
+.cell-pts-label.earned { color: var(--green); font-weight: 700; }
+.cell-pts-label.penalty { color: var(--red); font-weight: 700; }
+
+/* Quick-claim (＋) button */
+.cell-add {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 2px dashed var(--border); color: var(--text3);
+    font-size: 20px; background: none; cursor: pointer;
+    transition: all .2s;
+}
+.cell-add:active { background: var(--bg3); border-color: var(--accent); color: var(--accent); }
+
+/* Footer (totals) */
+.today-grid tfoot { background: var(--bg3); }
+.total-label-cell {
+    padding: 11px 12px;
+    font-size: 13px; font-weight: 700; color: var(--text3);
+    text-transform: uppercase; letter-spacing: .4px;
+    background: var(--bg3);
+    border-top: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+}
+.total-pts-cell {
+    text-align: center; padding: 11px 6px;
+    border-left: 1px solid var(--border);
+    border-top: 1px solid var(--border);
     font-size: 17px; font-weight: 700;
 }
-.empty-today {
-    text-align: center; padding: 40px 20px; color: var(--text3);
-    font-size: 17px;
-}
+.total-pts-cell .pts-unit { font-size: 12px; font-weight: 500; color: var(--text3); }
+
+/* Empty state */
+.empty-today { text-align: center; padding: 48px 20px; color: var(--text3); font-size: 18px; }
 </style>
 {% endblock %}
 
@@ -67,84 +143,89 @@
         <div class="today-title">📅 Today</div>
         <div class="today-date-sub">{{ today.strftime('%A, %b %-d') }}</div>
     </div>
-    <button class="claim-fab" onclick="openClaimSheet()">＋ Claim a Task</button>
+    <button class="claim-fab" onclick="openClaimSheet()">＋ Claim</button>
 </div>
 
-{% set has_any = claims_by_member|length > 0 %}
-
-{% if not has_any %}
-<div class="empty-today">
-    <div style="font-size:52px;margin-bottom:12px;">📋</div>
-    No tasks claimed for today yet.<br>Tap <b>+ Claim a Task</b> to get started!
+{% if task_rows %}
+<div class="grid-wrap">
+<table class="today-grid" id="todayGrid">
+<thead>
+<tr>
+    <th class="col-task">Task</th>
+    {% for m in members %}
+    <th class="col-member">
+        <div class="member-head-avatar">{{ m.avatar }}</div>
+        <div class="member-head-name">{{ m.name.split()[0] }}</div>
+    </th>
+    {% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for row in task_rows %}
+<tr>
+    <td class="task-cell">
+        <div class="task-cell-inner">
+            <span class="task-icon-sm">{{ row.task_icon }}</span>
+            <div>
+                <div class="task-cell-name">{{ row.task_name }}</div>
+                <div class="task-cell-pts">
+                    {% if row.task_points > 0 %}{{ row.task_points }}⭐
+                    {% elif row.task_points < 0 %}⚠️{{ row.task_points }}pts{% endif %}
+                </div>
+            </div>
+        </div>
+    </td>
+    {% for m in members %}
+    {% set task_cells = cells.get(row.task_id, {}) %}
+    {% set cl = task_cells.get(m.id) %}
+    <td class="check-cell" data-member="{{ m.id }}">
+        {% if cl %}
+        <button class="cell-btn"
+                id="cellbtn-{{ cl.id }}"
+                onclick="toggleCell({{ cl.id }}, {{ 'true' if cl.completed else 'false' }}, {{ row.task_points }}, this)">
+            <div class="cell-check {% if cl.completed %}done{% else %}unchecked{% endif %}"
+                 id="cellck-{{ cl.id }}"></div>
+            <div class="cell-pts-label {% if cl.completed %}{% if row.task_points < 0 %}penalty{% else %}earned{% endif %}{% endif %}"
+                 id="celllbl-{{ cl.id }}">
+                {% if cl.completed %}
+                    {% if row.task_points >= 0 %}+{{ row.task_points }}pts{% else %}{{ row.task_points }}pts{% endif %}
+                {% else %}
+                    {% if row.task_points != 0 %}{{ row.task_points }}⭐{% else %}—{% endif %}
+                {% endif %}
+            </div>
+        </button>
+        {% else %}
+        <button class="cell-add"
+                onclick="quickClaim({{ row.task_id }}, {{ m.id }})"
+                title="Claim for {{ m.name }}">＋</button>
+        {% endif %}
+    </td>
+    {% endfor %}
+</tr>
+{% endfor %}
+</tbody>
+<tfoot>
+<tr>
+    <td class="total-label-cell">Today</td>
+    {% for m in members %}
+    {% set tot = member_totals[m.id] %}
+    <td class="total-pts-cell" id="total-{{ m.id }}"
+        style="color:{% if tot > 0 %}var(--green){% elif tot < 0 %}var(--red){% else %}var(--text3){% endif %};">
+        {{ tot }} <span class="pts-unit">pts</span>
+    </td>
+    {% endfor %}
+</tr>
+</tfoot>
+</table>
 </div>
 {% else %}
-{% for m in members %}
-{% if m.id in claims_by_member %}
-<div class="member-section-label">
-    <div class="avatar-sm" style="background:{{ m.color }}33;">{{ m.avatar }}</div>
-    {{ m.name }}
-</div>
-<div class="card">
-{% for cl in claims_by_member[m.id] %}
-<div class="claim-card {% if cl.completed %}done{% endif %}" id="claim-{{ cl.id }}">
-    <div style="font-size:28px;flex-shrink:0;">{{ cl.task_icon }}</div>
-    <div class="claim-info">
-        <div class="claim-name {% if cl.completed %}strikethrough{% endif %}">{{ cl.task_name }}</div>
-        {% if cl.goal_amount %}
-        <div class="claim-goal">
-            Goal: {{ cl.goal_amount|int if cl.goal_amount == cl.goal_amount|int else cl.goal_amount }}
-            {{ cl.goal_unit or '' }}
-        </div>
-        {% endif %}
-
-        {% if cl.goal_amount %}
-        <div class="claim-progress">
-            <div class="claim-prog-bar">
-                <div class="claim-prog-fill"
-                     id="bar-{{ cl.id }}"
-                     style="width:{{ [[(cl.progress / cl.goal_amount * 100)|round(0), 0]|max, 100]|min }}%;"></div>
-            </div>
-            <span class="claim-prog-txt" id="prog-txt-{{ cl.id }}">
-                {{ cl.progress|int if cl.progress == cl.progress|int else cl.progress }}/{{ cl.goal_amount|int if cl.goal_amount == cl.goal_amount|int else cl.goal_amount }}
-                {{ cl.goal_unit or '' }}
-            </span>
-        </div>
-        {% endif %}
-
-        <div class="claim-actions">
-            {% if cl.goal_amount and not cl.completed %}
-            <button class="claim-btn claim-btn-update"
-                    onclick="openUpdateSheet({{ cl.id }}, {{ cl.goal_amount }}, '{{ cl.goal_unit or '' }}', {{ cl.progress }})">
-                ✏️ Update
-            </button>
-            {% endif %}
-            {% if not cl.completed %}
-            <button class="claim-btn claim-btn-done"
-                    onclick="markDone({{ cl.id }})">
-                ✓ Done
-            </button>
-            {% else %}
-            <button class="claim-btn claim-btn-undone"
-                    onclick="markUndone({{ cl.id }})">
-                ↩ Undo
-            </button>
-            {% endif %}
-            <button class="claim-btn claim-btn-cal"
-                    onclick="addToCalendar('{{ cl.task_name }}', '{{ cl.goal_amount and (cl.goal_amount|string + ' ' + (cl.goal_unit or '')) or '' }}')">
-                📅 Cal
-            </button>
-            <button class="claim-btn-remove"
-                    onclick="removeClaim({{ cl.id }})">🗑</button>
-        </div>
-    </div>
-</div>
-{% endfor %}
+<div class="empty-today">
+    <div style="font-size:52px;margin-bottom:12px;">📋</div>
+    No tasks claimed for today yet.<br>Tap <b>＋ Claim</b> to get started!
 </div>
 {% endif %}
-{% endfor %}
-{% endif %}
 
-<div style="height:16px;"></div>
+<div style="height:20px;"></div>
 
 <!-- ── Claim Sheet ── -->
 <div class="overlay" id="claimOverlay" onclick="closeClaimSheet(event)">
@@ -187,31 +268,62 @@
     <button onclick="submitClaim()" class="btn btn-primary">✅ Claim for Today</button>
 </div>
 </div>
-
-<!-- ── Update Progress Sheet ── -->
-<div class="overlay" id="updateOverlay" onclick="closeUpdateSheet(event)">
-<div class="sheet" onclick="event.stopPropagation()">
-    <div class="sheet-handle"></div>
-    <div class="sheet-title">Update Progress</div>
-    <input type="hidden" id="updateClaimId">
-    <input type="hidden" id="updateGoal">
-    <input type="hidden" id="updateUnit">
-
-    <div class="form-group">
-        <label class="form-label" id="updateLabel">Progress</label>
-        <input type="number" class="form-input" id="updateProgress"
-               placeholder="0" min="0" step="any">
-    </div>
-
-    <button onclick="submitUpdate()" class="btn btn-primary">Save Progress</button>
-</div>
-</div>
-
 {% endblock %}
 
 {% block scripts %}
 <script>
 const TODAY_STR = '{{ today_str }}';
+const MEMBER_IDS = [{% for m in members %}{{ m.id }},{% endfor %}];
+
+/* per-member running totals (updated in-place after toggles) */
+const TOTALS = { {% for m in members %}{{ m.id }}: {{ member_totals[m.id] }},{% endfor %} };
+
+/* ── Toggle cell done/undone ── */
+function toggleCell(claimId, isDone, pts, btn) {
+    const newDone = !isDone;
+    fetch('/api/update-claim', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({claim_id: claimId, completed: newDone})
+    }).then(r => r.json()).then(() => {
+        // Update checkbox + label
+        const ck  = document.getElementById('cellck-'  + claimId);
+        const lbl = document.getElementById('celllbl-' + claimId);
+        if (ck) ck.className = 'cell-check ' + (newDone ? 'done' : 'unchecked');
+        if (lbl) {
+            if (newDone) {
+                lbl.textContent = (pts >= 0 ? '+' : '') + pts + 'pts';
+                lbl.className   = 'cell-pts-label ' + (pts < 0 ? 'penalty' : 'earned');
+            } else {
+                lbl.textContent = pts !== 0 ? pts + '⭐' : '—';
+                lbl.className   = 'cell-pts-label';
+            }
+        }
+        // Flip the next click direction
+        btn.setAttribute('onclick', `toggleCell(${claimId},${newDone},${pts},this)`);
+
+        // Update running total for the member whose column this cell is in
+        const td  = btn.closest('td');
+        const mid = parseInt(td.dataset.member);
+        if (!isNaN(mid)) {
+            TOTALS[mid] = (TOTALS[mid] || 0) + (newDone ? pts : -pts);
+            const totalCell = document.getElementById('total-' + mid);
+            if (totalCell) {
+                const t = TOTALS[mid];
+                totalCell.style.color = t > 0 ? 'var(--green)' : t < 0 ? 'var(--red)' : 'var(--text3)';
+                totalCell.innerHTML = t + ' <span class="pts-unit">pts</span>';
+            }
+        }
+        showToast(newDone ? '✅ Done! +' + pts + 'pts' : '↩ Marked undone', 1600);
+    });
+}
+
+/* ── Quick-claim (＋ in cell) ── */
+function quickClaim(taskId, memberId) {
+    document.getElementById('claimTask').value   = taskId;
+    document.getElementById('claimMember').value = memberId;
+    document.getElementById('claimAmount').value = '';
+    document.getElementById('claimOverlay').classList.add('show');
+}
 
 /* ── Claim sheet ── */
 function openClaimSheet() {
@@ -235,95 +347,14 @@ function submitClaim() {
     })
     .then(r => r.json())
     .then(d => {
-        if (d.success) { showToast('✅ Task claimed!'); setTimeout(() => location.reload(), 700); }
+        if (d.success) {
+            showToast('✅ Task claimed!');
+            setTimeout(() => location.reload(), 700);
+        } else {
+            showToast('⚠️ Already claimed for today');
+        }
     });
     document.getElementById('claimOverlay').classList.remove('show');
-}
-
-/* ── Update progress sheet ── */
-function openUpdateSheet(claimId, goal, unit, current) {
-    document.getElementById('updateClaimId').value = claimId;
-    document.getElementById('updateGoal').value    = goal;
-    document.getElementById('updateUnit').value    = unit;
-    document.getElementById('updateProgress').value = current;
-    document.getElementById('updateLabel').textContent = `Progress (goal: ${goal} ${unit})`;
-    document.getElementById('updateOverlay').classList.add('show');
-    setTimeout(() => document.getElementById('updateProgress').focus(), 300);
-}
-function closeUpdateSheet(e) {
-    if (e.target === document.getElementById('updateOverlay'))
-        document.getElementById('updateOverlay').classList.remove('show');
-}
-function submitUpdate() {
-    const id       = parseInt(document.getElementById('updateClaimId').value);
-    const goal     = parseFloat(document.getElementById('updateGoal').value);
-    const progress = parseFloat(document.getElementById('updateProgress').value) || 0;
-    const unit     = document.getElementById('updateUnit').value;
-
-    fetch('/api/update-claim', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({claim_id: id, progress})
-    }).then(() => {
-        // Update bar + text in-place
-        const pct = Math.min(100, Math.max(0, progress / goal * 100));
-        const bar = document.getElementById('bar-' + id);
-        const txt = document.getElementById('prog-txt-' + id);
-        if (bar) bar.style.width = pct + '%';
-        if (txt) txt.textContent = `${progress}/${goal} ${unit}`;
-        document.getElementById('updateOverlay').classList.remove('show');
-        showToast('Progress updated!');
-    });
-}
-
-/* ── Mark done / undo ── */
-function markDone(claimId) {
-    fetch('/api/update-claim', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({claim_id: claimId, completed: true})
-    }).then(() => {
-        const card = document.getElementById('claim-' + claimId);
-        if (card) { card.classList.add('done'); location.reload(); }
-    });
-}
-function markUndone(claimId) {
-    fetch('/api/update-claim', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({claim_id: claimId, completed: false})
-    }).then(() => location.reload());
-}
-
-/* ── Remove claim ── */
-function removeClaim(claimId) {
-    if (!confirm('Remove this task from today?')) return;
-    fetch('/api/unclaim-task', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({claim_id: claimId})
-    }).then(() => {
-        const card = document.getElementById('claim-' + claimId);
-        if (card) card.remove();
-        showToast('Removed');
-    });
-}
-
-/* ── Add to Calendar (ICS download) ── */
-function addToCalendar(taskName, goalText) {
-    const d = TODAY_STR.replace(/-/g, '');
-    const summary = (goalText ? `${taskName} — ${goalText}` : taskName).replace(/[,;]/g, ' ');
-    const ics = [
-        'BEGIN:VCALENDAR', 'VERSION:2.0',
-        'BEGIN:VEVENT',
-        `DTSTART;VALUE=DATE:${d}`,
-        `DTEND;VALUE=DATE:${d}`,
-        `SUMMARY:${summary}`,
-        'END:VEVENT', 'END:VCALENDAR'
-    ].join('\r\n');
-    const a = document.createElement('a');
-    a.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
-    a.download = taskName + '.ics';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    showToast('📅 Opening Calendar…');
 }
 </script>
 {% endblock %}
