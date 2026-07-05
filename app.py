@@ -98,7 +98,26 @@ SCHEMA_MIGRATIONS = {
         ALTER TABLE chores ADD COLUMN version    INTEGER DEFAULT 1;
         UPDATE schema_version SET version = 4;
     ''',
+    # v5: daily_claims — members claim tasks for a specific day with an optional goal.
+    5: '''
+        CREATE TABLE IF NOT EXISTS daily_claims (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id     INTEGER NOT NULL,
+            member_id   INTEGER NOT NULL,
+            date        TEXT    NOT NULL,
+            goal_amount REAL    DEFAULT NULL,
+            goal_unit   TEXT    DEFAULT NULL,
+            progress    REAL    DEFAULT 0,
+            completed   INTEGER DEFAULT 0,
+            created_at  TEXT    DEFAULT (datetime('now')),
+            UNIQUE(task_id, member_id, date)
+        );
+        UPDATE schema_version SET version = 5;
+    ''',
 }
+
+CURRENT_SCHEMA_VERSION = 5
+GOAL_UNITS = ['pages', 'min', 'hr', 'chapters', '个', '次']
 
 def init_db():
     conn = get_db()
@@ -255,39 +274,83 @@ def member_view(member_id):
 
 @app.route('/chores')
 def chores_page():
+    return redirect(url_for('tasks_page'))
+
+@app.route('/chores/new')
+def new_chore():
+    return redirect(url_for('new_task'))
+
+@app.route('/chores/<int:chore_id>/edit')
+def edit_chore(chore_id):
+    return redirect(url_for('edit_task', task_id=chore_id))
+
+@app.route('/tasks')
+def tasks_page():
     conn = get_db()
     members = [dict(m) for m in conn.execute('SELECT * FROM members ORDER BY sort_order, id')]
     all_member_ids = [m['id'] for m in members]
     chore_rows = conn.execute('SELECT * FROM chores WHERE active=1 ORDER BY sort_order, id').fetchall()
-    chores_data = []
+    today_str = date.today().isoformat()
+    claimed_today = {(r['task_id'], r['member_id'])
+                     for r in conn.execute('SELECT task_id, member_id FROM daily_claims WHERE date=?',
+                                           (today_str,)).fetchall()}
+    tasks_data = []
     for c in chore_rows:
         mid_list = get_assigned_member_ids(c, all_member_ids, conn)
         assigned = [m for m in members if m['id'] in mid_list]
-        chores_data.append({'chore': dict(c), 'assigned': assigned})
+        tasks_data.append({'chore': dict(c), 'assigned': assigned})
     conn.close()
-    return render_template('chores.html', chores=chores_data, all_members=members)
+    return render_template('tasks.html', tasks=tasks_data, all_members=members,
+                           claimed_today=claimed_today, goal_units=GOAL_UNITS,
+                           today_str=today_str)
 
-@app.route('/chores/new')
-def new_chore():
+@app.route('/tasks/new')
+def new_task():
     conn = get_db()
     members = [dict(m) for m in conn.execute('SELECT * FROM members ORDER BY sort_order, id')]
     conn.close()
-    return render_template('chore_form.html', chore=None, all_members=members,
+    return render_template('task_form.html', chore=None, all_members=members,
                            assigned_ids=[], schedule_days_list=[])
 
-@app.route('/chores/<int:chore_id>/edit')
-def edit_chore(chore_id):
+@app.route('/tasks/<int:task_id>/edit')
+def edit_task(task_id):
     conn = get_db()
-    chore = conn.execute('SELECT * FROM chores WHERE id=?', (chore_id,)).fetchone()
+    chore = conn.execute('SELECT * FROM chores WHERE id=?', (task_id,)).fetchone()
     if not chore:
-        return redirect(url_for('chores_page'))
+        return redirect(url_for('tasks_page'))
     members = [dict(m) for m in conn.execute('SELECT * FROM members ORDER BY sort_order, id')]
     assigned_ids = [r['member_id'] for r in conn.execute(
-        'SELECT member_id FROM chore_members WHERE chore_id=?', (chore_id,)).fetchall()]
+        'SELECT member_id FROM chore_members WHERE chore_id=?', (task_id,)).fetchall()]
     schedule_days_list = json.loads(chore['schedule_days'] or '[]')
     conn.close()
-    return render_template('chore_form.html', chore=dict(chore), all_members=members,
+    return render_template('task_form.html', chore=dict(chore), all_members=members,
                            assigned_ids=assigned_ids, schedule_days_list=schedule_days_list)
+
+@app.route('/today')
+def today_page():
+    conn = get_db()
+    today_str = date.today().isoformat()
+    members   = [dict(m) for m in conn.execute('SELECT * FROM members ORDER BY sort_order, id')]
+    tasks     = [dict(t) for t in conn.execute('SELECT * FROM chores WHERE active=1 ORDER BY sort_order, id').fetchall()]
+    raw_claims = conn.execute('''
+        SELECT dc.*, c.name as task_name, c.icon as task_icon, c.points as task_points,
+               m.name as member_name, m.avatar as member_avatar, m.color as member_color
+        FROM daily_claims dc
+        JOIN chores c ON dc.task_id = c.id
+        JOIN members m ON dc.member_id = m.id
+        WHERE dc.date = ?
+        ORDER BY m.sort_order, m.id, dc.created_at
+    ''', (today_str,)).fetchall()
+    claims_by_member = {}
+    for r in raw_claims:
+        mid = r['member_id']
+        claims_by_member.setdefault(mid, []).append(dict(r))
+    conn.close()
+    return render_template('today.html',
+        members=members, tasks=tasks,
+        claims_by_member=claims_by_member,
+        today=date.today(), today_str=today_str,
+        goal_units=GOAL_UNITS)
 
 @app.route('/chart')
 def chart():
@@ -464,6 +527,60 @@ def admin():
 # ---------------------------------------------------------------------------
 # API routes — writes go through _write_lock
 # ---------------------------------------------------------------------------
+
+@app.route('/api/claim-task', methods=['POST'])
+def claim_task():
+    data = request.json
+    task_id     = data['task_id']
+    member_id   = data['member_id']
+    goal_amount = data.get('goal_amount') or None
+    goal_unit   = data.get('goal_unit') or None
+    date_str    = data.get('date', date.today().isoformat())
+    with _write_lock:
+        conn = get_db()
+        try:
+            conn.execute('''
+                INSERT OR REPLACE INTO daily_claims
+                    (task_id, member_id, date, goal_amount, goal_unit, progress, completed)
+                VALUES (?, ?, ?, ?, ?, 0, 0)
+            ''', (task_id, member_id, date_str, goal_amount, goal_unit))
+            conn.commit()
+            claim_id = conn.execute(
+                'SELECT id FROM daily_claims WHERE task_id=? AND member_id=? AND date=?',
+                (task_id, member_id, date_str)).fetchone()['id']
+        finally:
+            conn.close()
+    return jsonify({'success': True, 'claim_id': claim_id})
+
+@app.route('/api/update-claim', methods=['POST'])
+def update_claim():
+    data = request.json
+    claim_id  = data['claim_id']
+    progress  = data.get('progress')
+    completed = data.get('completed')
+    with _write_lock:
+        conn = get_db()
+        try:
+            if progress is not None:
+                conn.execute('UPDATE daily_claims SET progress=? WHERE id=?', (progress, claim_id))
+            if completed is not None:
+                conn.execute('UPDATE daily_claims SET completed=? WHERE id=?', (int(completed), claim_id))
+            conn.commit()
+        finally:
+            conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/unclaim-task', methods=['POST'])
+def unclaim_task():
+    data = request.json
+    with _write_lock:
+        conn = get_db()
+        try:
+            conn.execute('DELETE FROM daily_claims WHERE id=?', (data['claim_id'],))
+            conn.commit()
+        finally:
+            conn.close()
+    return jsonify({'success': True})
 
 @app.route('/api/toggle-completion', methods=['POST'])
 def toggle_completion():

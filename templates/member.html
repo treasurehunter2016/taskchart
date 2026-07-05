@@ -100,7 +100,7 @@
 
 <!-- Today's chores -->
 {% if today_chores %}
-<div class="section-label">📅 Today · {{ total_done }}/{{ total_due }} done</div>
+<div class="section-label">📅 Today · {{ total_done }}/{{ total_due }} tasks done</div>
 <div class="card" id="todaySection">
     {% for item in today_chores %}
     <div class="chore-row"
@@ -124,7 +124,7 @@
 
 {% if total_due > 0 and total_done == total_due %}
 <div class="all-done-banner" id="allDoneBanner">
-    🎉 Amazing! All chores done for today! 🎊
+    🎉 Amazing! All tasks done for today! 🎊
 </div>
 {% endif %}
 

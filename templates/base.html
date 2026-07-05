@@ -274,16 +274,19 @@
 
     <nav class="tab-bar">
         <a href="/" class="tab-item {% if active_tab=='household' %}active{% endif %}">
-            <span class="tab-icon">🏠</span><span class="tab-label">Household</span>
+            <span class="tab-icon">🏠</span><span class="tab-label">Home</span>
         </a>
-        <a href="/chores" class="tab-item {% if active_tab=='chores' %}active{% endif %}">
-            <span class="tab-icon">✂️</span><span class="tab-label">Chores</span>
+        <a href="/today" class="tab-item {% if active_tab=='today' %}active{% endif %}">
+            <span class="tab-icon">📅</span><span class="tab-label">Today</span>
+        </a>
+        <a href="/tasks" class="tab-item {% if active_tab=='tasks' %}active{% endif %}">
+            <span class="tab-icon">📋</span><span class="tab-label">Tasks</span>
         </a>
         <a href="/chart" class="tab-item {% if active_tab=='chart' %}active{% endif %}">
             <span class="tab-icon">📊</span><span class="tab-label">Chart</span>
         </a>
         <a href="/balances" class="tab-item {% if active_tab=='balances' %}active{% endif %}">
-            <span class="tab-icon">💰</span><span class="tab-label">Balances</span>
+            <span class="tab-icon">💰</span><span class="tab-label">Points</span>
         </a>
         <a href="/settings" class="tab-item {% if active_tab=='settings' %}active{% endif %}">
             <span class="tab-icon">⚙️</span><span class="tab-label">Settings</span>

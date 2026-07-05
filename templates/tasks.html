@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% set active_tab = "tasks" %}
+{% block title %}Tasks{% endblock %}
+
+{% block head %}
+<style>
+.task-row { display: flex; align-items: center; padding: 14px 16px; gap: 12px; border-bottom: 1px solid var(--border); }
+.task-row:last-child { border-bottom: none; }
+.task-meta  { flex: 1; min-width: 0; }
+.task-name  { font-size: 17px; font-weight: 500; }
+.task-schedule { font-size: 13px; color: var(--text3); margin-top: 2px; }
+.task-right { display: flex; align-items: center; gap: 8px; }
+.assigned-avatars { display: flex; align-items: center; }
+
+/* Large add button */
+.add-task-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 22px;
+    font-size: 20px; font-weight: 700; padding: 10px 22px;
+    cursor: pointer; text-decoration: none;
+    box-shadow: 0 3px 12px var(--shadow); transition: opacity .15s;
+}
+.add-task-btn:active { opacity: .75; }
+
+/* Claim button per task */
+.claim-task-btn {
+    padding: 5px 11px; border-radius: 14px; border: none;
+    background: var(--accent)22; color: var(--accent);
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    transition: all .15s; white-space: nowrap;
+}
+.claim-task-btn:active { opacity: .7; }
+.claim-task-btn.claimed { background: var(--green)22; color: var(--green); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <span class="page-title">Tasks</span>
+    <a href="/tasks/new" class="add-task-btn">＋ New</a>
+</div>
+
+{% if tasks %}
+<div class="card">
+    {% for item in tasks %}
+    <div class="task-row">
+        <div class="chore-icon" style="background:{% if item.chore.points < 0 %}var(--red)22{% else %}var(--bg3){% endif %};">
+            {{ item.chore.icon }}
+        </div>
+        <div class="task-meta">
+            <div class="task-name">{{ item.chore.name }}</div>
+            <div class="task-schedule">
+                {% if item.chore.schedule_type == 'daily' %}Every Day
+                {% elif item.chore.schedule_type == 'weekdays' %}Weekdays
+                {% elif item.chore.schedule_type == 'weekends' %}Weekends
+                {% elif item.chore.schedule_type == 'as_needed' %}As Needed
+                {% else %}Custom Schedule{% endif %}
+                {% if item.chore.assignment_type == 'rotate' %} · Rotating{% endif %}
+                {% if item.chore.assignment_type == 'anyone' %} · Anyone{% endif %}
+            </div>
+        </div>
+        <div class="task-right">
+            <div class="assigned-avatars">
+                {% for m in item.assigned[:3] %}
+                <div class="avatar-sm avatar-overlap" style="background:{{ m.color }}33;font-size:13px;">{{ m.avatar }}</div>
+                {% endfor %}
+                {% if item.assigned|length > 3 %}
+                <div class="avatar-sm avatar-overlap" style="background:var(--bg3);font-size:11px;color:var(--text3);">+{{ item.assigned|length - 3 }}</div>
+                {% endif %}
+            </div>
+            {% if item.chore.points != 0 %}
+            <span class="pts-badge" style="{% if item.chore.points < 0 %}color:var(--red);{% endif %}">
+                {% if item.chore.points > 0 %}{{ item.chore.points }}pts{% else %}⚠️ {{ item.chore.points }}pts{% endif %}
+            </span>
+            {% endif %}
+            <!-- Claim for today -->
+            {% set is_claimed = false %}
+            {% for m in item.assigned %}{% if (item.chore.id, m.id) in claimed_today %}{% set is_claimed = true %}{% endif %}{% endfor %}
+            <button class="claim-task-btn {% if is_claimed %}claimed{% endif %}"
+                    onclick="openClaimForTask({{ item.chore.id }}, '{{ item.chore.name }}', '{{ item.chore.icon }}')">
+                {% if is_claimed %}✓ Claimed{% else %}📅 Today{% endif %}
+            </button>
+            <a href="/tasks/{{ item.chore.id }}/edit" style="color:var(--accent);font-size:15px;padding:4px;">›</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">📋</div>
+    <div class="empty-state-text">No tasks yet</div>
+    <div style="margin-top:24px;">
+        <a href="/tasks/new" class="btn btn-primary" style="display:inline-flex;width:auto;padding:14px 32px;">
+            ＋ Create First Task
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<!-- ── Claim Sheet ── -->
+<div class="overlay" id="claimOverlay" onclick="closeClaimSheet(event)">
+<div class="sheet" onclick="event.stopPropagation()">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="claimSheetTitle">Claim for Today</div>
+
+    <input type="hidden" id="claimTaskId">
+
+    <div class="form-group">
+        <label class="form-label">Who</label>
+        <select class="form-input" id="claimMember">
+            {% for m in all_members %}
+            <option value="{{ m.id }}">{{ m.avatar }} {{ m.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">Goal <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+        <div style="display:flex;gap:8px;">
+            <input type="number" class="form-input" id="claimAmount"
+                   placeholder="e.g. 5" min="0" step="any" style="flex:1;">
+            <select class="form-input" id="claimUnit" style="flex:1;">
+                <option value="">—</option>
+                {% for u in goal_units %}
+                <option value="{{ u }}">{{ u }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <button onclick="submitClaim()" class="btn btn-primary">✅ Add to Today</button>
+</div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TODAY_STR = '{{ today_str if today_str is defined else "" }}';
+
+function openClaimForTask(taskId, taskName, taskIcon) {
+    document.getElementById('claimTaskId').value = taskId;
+    document.getElementById('claimSheetTitle').textContent = taskIcon + ' ' + taskName;
+    document.getElementById('claimAmount').value = '';
+    document.getElementById('claimOverlay').classList.add('show');
+}
+function closeClaimSheet(e) {
+    if (e.target === document.getElementById('claimOverlay'))
+        document.getElementById('claimOverlay').classList.remove('show');
+}
+function submitClaim() {
+    const task_id   = parseInt(document.getElementById('claimTaskId').value);
+    const member_id = parseInt(document.getElementById('claimMember').value);
+    const amtRaw    = document.getElementById('claimAmount').value;
+    const goal_amount = amtRaw ? parseFloat(amtRaw) : null;
+    const goal_unit   = document.getElementById('claimUnit').value || null;
+    const date_str    = new Date().toLocaleDateString('en-CA');
+
+    fetch('/api/claim-task', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({task_id, member_id, goal_amount, goal_unit, date: date_str})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.success) {
+            showToast('✅ Added to Today!');
+            document.getElementById('claimOverlay').classList.remove('show');
+            setTimeout(() => location.reload(), 700);
+        }
+    });
+}
+</script>
+{% endblock %}
