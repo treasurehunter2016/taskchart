@@ -134,6 +134,70 @@
 
 /* Empty state */
 .empty-today { text-align: center; padding: 48px 20px; color: var(--text3); font-size: 18px; }
+
+/* ── View toggle ── */
+.view-toggle {
+    display: flex; margin: 0 16px 12px;
+    background: var(--bg3); border-radius: 10px; padding: 3px;
+}
+.view-tab {
+    flex: 1; text-align: center; padding: 8px 0;
+    border-radius: 8px; border: none; background: none;
+    font-size: 15px; font-weight: 600; color: var(--text3);
+    cursor: pointer; transition: all .2s;
+}
+.view-tab.active { background: var(--bg2); color: var(--text); box-shadow: 0 1px 3px var(--shadow); }
+
+/* ── Calendar timeline ── */
+#calView { display: none; }
+.cal-unscheduled {
+    margin: 0 16px 12px; padding: 12px 14px;
+    background: var(--bg2); border-radius: 12px;
+    box-shadow: 0 1px 4px var(--shadow);
+}
+.cal-unscheduled-title { font-size: 14px; font-weight: 700; color: var(--text3); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .4px; }
+.cal-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg3); border-radius: 16px; padding: 5px 12px;
+    font-size: 14px; font-weight: 600; margin: 3px; cursor: pointer;
+    border: 1.5px solid var(--border); transition: all .15s;
+}
+.cal-chip.done { opacity: .5; text-decoration: line-through; }
+.cal-chip:active { background: var(--bg4); }
+
+.cal-timeline { margin: 0 16px 16px; }
+.cal-hour {
+    display: flex; align-items: flex-start; gap: 10px;
+    min-height: 54px; position: relative;
+}
+.cal-hour::before {
+    content: ''; position: absolute; left: 52px; top: 26px;
+    right: 0; height: 1px; background: var(--border);
+}
+.cal-hour-label {
+    width: 46px; flex-shrink: 0; font-size: 13px; font-weight: 600;
+    color: var(--text3); padding-top: 10px; text-align: right;
+}
+.cal-hour-content {
+    flex: 1; padding: 4px 0 4px 12px; min-height: 54px;
+    display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start;
+}
+.cal-event {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent)22; border: 1.5px solid var(--accent)88;
+    color: var(--accent); border-radius: 10px;
+    padding: 5px 10px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: all .15s;
+}
+.cal-event.done { background: var(--green)22; border-color: var(--green)88; color: var(--green); }
+.cal-event:active { opacity: .7; }
+.cal-add-slot {
+    width: 100%; text-align: left; padding: 4px 12px;
+    background: none; border: none; color: var(--text3);
+    font-size: 13px; cursor: pointer; border-radius: 6px;
+    transition: background .15s; min-height: 36px;
+}
+.cal-add-slot:active { background: var(--bg3); }
 </style>
 {% endblock %}
 
@@ -146,6 +210,14 @@
     <button class="claim-fab" onclick="openClaimSheet()">＋ Claim</button>
 </div>
 
+<!-- View toggle -->
+<div class="view-toggle">
+    <button class="view-tab active" id="tabGrid"     onclick="switchView('grid')">📋 Grid</button>
+    <button class="view-tab"        id="tabCalendar" onclick="switchView('cal')">📅 Calendar</button>
+</div>
+
+<!-- ── GRID VIEW ── -->
+<div id="gridView">
 {% if task_rows %}
 <div class="grid-wrap">
 <table class="today-grid" id="todayGrid">
@@ -221,11 +293,88 @@
 {% else %}
 <div class="empty-today">
     <div style="font-size:52px;margin-bottom:12px;">📋</div>
-    No tasks claimed for today yet.<br>Tap <b>＋ Claim</b> to get started!
+    No tasks for today yet.<br>Add tasks in the <b>Tasks</b> tab!
 </div>
 {% endif %}
+</div><!-- end #gridView -->
+
+<!-- ── CALENDAR VIEW ── -->
+<div id="calView">
+{% if task_rows %}
+
+<!-- Unscheduled tasks -->
+<div class="cal-unscheduled">
+    <div class="cal-unscheduled-title">Unscheduled</div>
+    <div id="unscheduledChips">
+        {% for row in task_rows %}
+        {% for m in members %}
+        {% set task_cells = cells.get(row.task_id, {}) %}
+        {% set cl = task_cells.get(m.id) %}
+        {% if cl and not cl.scheduled_time %}
+        <span class="cal-chip {% if cl.completed %}done{% endif %}"
+              onclick="openTimeSheet({{ cl.id }}, '{{ row.task_icon }}', '{{ row.task_name | e }}', '{{ m.name.split()[0] }}')"
+              id="chip-{{ cl.id }}">
+            {{ row.task_icon }} {{ row.task_name }} · {{ m.name.split()[0] }}
+        </span>
+        {% endif %}
+        {% endfor %}
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Hourly timeline 6am-10pm -->
+<div class="cal-timeline" id="calTimeline">
+    {% for h in range(6, 23) %}
+    {% set hh = '%02d' % h %}
+    <div class="cal-hour" id="hour-{{ hh }}">
+        <div class="cal-hour-label">{{ '%d%s' % (h if h <= 12 else h-12, 'am' if h < 12 else 'pm') }}</div>
+        <div class="cal-hour-content" id="hcontent-{{ hh }}">
+            {% for row in task_rows %}
+            {% for m in members %}
+            {% set task_cells = cells.get(row.task_id, {}) %}
+            {% set cl = task_cells.get(m.id) %}
+            {% if cl and cl.scheduled_time and cl.scheduled_time[:2] == hh %}
+            <div class="cal-event {% if cl.completed %}done{% endif %}"
+                 onclick="openTimeSheet({{ cl.id }}, '{{ row.task_icon }}', '{{ row.task_name | e }}', '{{ m.name.split()[0] }}')"
+                 id="calevent-{{ cl.id }}">
+                {{ row.task_icon }} {{ row.task_name }} · {{ m.name.split()[0] }}
+                <span style="font-size:12px;opacity:.7;">{{ cl.scheduled_time }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% endfor %}
+            <button class="cal-add-slot" onclick="openTimeSheetForHour('{{ hh }}:00')">＋</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="empty-today">
+    <div style="font-size:52px;margin-bottom:12px;">📅</div>
+    No tasks for today.
+</div>
+{% endif %}
+</div><!-- end #calView -->
 
 <div style="height:20px;"></div>
+
+<!-- ── Schedule Time Sheet ── -->
+<div class="overlay" id="timeOverlay" onclick="closeTimeSheet(event)">
+<div class="sheet" onclick="event.stopPropagation()">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="timeSheetTitle">Set Time Slot</div>
+    <input type="hidden" id="timeClaimId">
+    <div class="form-group">
+        <label class="form-label">Time</label>
+        <input type="time" class="form-input" id="timeValue">
+    </div>
+    <div style="display:flex;gap:8px;">
+        <button onclick="saveTime()" class="btn btn-primary" style="flex:1;">📅 Set Time</button>
+        <button onclick="clearTime()" class="btn btn-ghost" style="flex:1;">✕ Remove</button>
+    </div>
+</div>
+</div>
 
 <!-- ── Claim Sheet ── -->
 <div class="overlay" id="claimOverlay" onclick="closeClaimSheet(event)">
@@ -274,9 +423,16 @@
 <script>
 const TODAY_STR = '{{ today_str }}';
 const MEMBER_IDS = [{% for m in members %}{{ m.id }},{% endfor %}];
-
-/* per-member running totals (updated in-place after toggles) */
 const TOTALS = { {% for m in members %}{{ m.id }}: {{ member_totals[m.id] }},{% endfor %} };
+
+/* ── View switch ── */
+function switchView(v) {
+    const isGrid = v === 'grid';
+    document.getElementById('gridView').style.display = isGrid ? '' : 'none';
+    document.getElementById('calView').style.display  = isGrid ? 'none' : '';
+    document.getElementById('tabGrid').classList.toggle('active', isGrid);
+    document.getElementById('tabCalendar').classList.toggle('active', !isGrid);
+}
 
 /* ── Toggle cell done/undone ── */
 function toggleCell(claimId, isDone, pts, btn) {
@@ -285,7 +441,6 @@ function toggleCell(claimId, isDone, pts, btn) {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({claim_id: claimId, completed: newDone})
     }).then(r => r.json()).then(() => {
-        // Update checkbox + label
         const ck  = document.getElementById('cellck-'  + claimId);
         const lbl = document.getElementById('celllbl-' + claimId);
         if (ck) ck.className = 'cell-check ' + (newDone ? 'done' : 'unchecked');
@@ -298,10 +453,9 @@ function toggleCell(claimId, isDone, pts, btn) {
                 lbl.className   = 'cell-pts-label';
             }
         }
-        // Flip the next click direction
         btn.setAttribute('onclick', `toggleCell(${claimId},${newDone},${pts},this)`);
 
-        // Update running total for the member whose column this cell is in
+        // Update running total
         const td  = btn.closest('td');
         const mid = parseInt(td.dataset.member);
         if (!isNaN(mid)) {
@@ -313,7 +467,13 @@ function toggleCell(claimId, isDone, pts, btn) {
                 totalCell.innerHTML = t + ' <span class="pts-unit">pts</span>';
             }
         }
-        showToast(newDone ? '✅ Done! +' + pts + 'pts' : '↩ Marked undone', 1600);
+        // Update calendar event style if visible
+        const ev = document.getElementById('calevent-' + claimId);
+        if (ev) ev.className = 'cal-event' + (newDone ? ' done' : '');
+        const chip = document.getElementById('chip-' + claimId);
+        if (chip) chip.className = 'cal-chip' + (newDone ? ' done' : '');
+
+        showToast(newDone ? '✅ Done! ' + (pts >= 0 ? '+' : '') + pts + 'pts' : '↩ Marked undone', 1600);
     });
 }
 
@@ -340,21 +500,52 @@ function submitClaim() {
     const amtRaw      = document.getElementById('claimAmount').value;
     const goal_amount = amtRaw ? parseFloat(amtRaw) : null;
     const goal_unit   = document.getElementById('claimUnit').value || null;
-
     fetch('/api/claim-task', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({task_id, member_id, goal_amount, goal_unit, date: TODAY_STR})
-    })
-    .then(r => r.json())
-    .then(d => {
-        if (d.success) {
-            showToast('✅ Task claimed!');
-            setTimeout(() => location.reload(), 700);
-        } else {
-            showToast('⚠️ Already claimed for today');
-        }
+    }).then(r => r.json()).then(d => {
+        if (d.success) { showToast('✅ Task added!'); setTimeout(() => location.reload(), 700); }
+        else showToast('⚠️ Already on the list');
     });
     document.getElementById('claimOverlay').classList.remove('show');
+}
+
+/* ── Calendar time sheet ── */
+let _pendingHour = null;
+function openTimeSheet(claimId, icon, name, memberName) {
+    _pendingHour = null;
+    document.getElementById('timeClaimId').value = claimId;
+    document.getElementById('timeSheetTitle').textContent = icon + ' ' + name + ' · ' + memberName;
+    document.getElementById('timeOverlay').classList.add('show');
+}
+function openTimeSheetForHour(hhmm) {
+    // When tapping "＋" in an empty slot: need to pick task+member first
+    // For now just set the pending hour and open the claim sheet
+    _pendingHour = hhmm;
+    document.getElementById('claimAmount').value = '';
+    document.getElementById('claimOverlay').classList.add('show');
+}
+function closeTimeSheet(e) {
+    if (e.target === document.getElementById('timeOverlay'))
+        document.getElementById('timeOverlay').classList.remove('show');
+}
+function saveTime() {
+    const claimId = parseInt(document.getElementById('timeClaimId').value);
+    const t       = document.getElementById('timeValue').value;
+    if (!t) { showToast('⚠️ Pick a time'); return; }
+    fetch('/api/update-claim', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({claim_id: claimId, scheduled_time: t})
+    }).then(() => { showToast('📅 Time set!'); setTimeout(() => location.reload(), 600); });
+    document.getElementById('timeOverlay').classList.remove('show');
+}
+function clearTime() {
+    const claimId = parseInt(document.getElementById('timeClaimId').value);
+    fetch('/api/update-claim', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({claim_id: claimId, scheduled_time: ''})
+    }).then(() => { showToast('Time removed'); setTimeout(() => location.reload(), 600); });
+    document.getElementById('timeOverlay').classList.remove('show');
 }
 </script>
 {% endblock %}

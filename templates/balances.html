@@ -19,12 +19,17 @@
     padding: 14px 16px; border-bottom: 1px solid var(--border);
 }
 .reward-row:last-child { border-bottom: none; }
-.pts-cost { font-size: 18px; font-weight: 700; color: var(--green); }  /* green, not red/yellow */
+.pts-cost { font-size: 18px; font-weight: 700; color: var(--green); }
 .reward-delete-btn {
     background: none; border: none; color: var(--text3);
     font-size: 20px; cursor: pointer; padding: 4px; opacity: .6;
 }
 .reward-delete-btn:active { opacity: 1; }
+.redeem-btn {
+    background: var(--accent); color: #fff; border: none; border-radius: 12px;
+    font-size: 14px; font-weight: 700; padding: 7px 14px; cursor: pointer; white-space: nowrap;
+}
+.redeem-btn:active { opacity: .75; }
 
 /* Detail panel */
 .detail-panel {
@@ -78,7 +83,8 @@
             <div class="list-row-title">{{ r.name }}</div>
             {% if r.description %}<div class="list-row-sub">{{ r.description }}</div>{% endif %}
         </div>
-        <span class="pts-cost">{{ r.points_cost }}pts</span>
+        <span class="pts-cost" style="margin-right:6px;">{{ r.points_cost }}pts</span>
+        <button onclick="openRedeemSheet({{ r.id }}, '{{ r.name | e }}', {{ r.points_cost }})" class="redeem-btn">Redeem</button>
         <button onclick="deleteReward({{ r.id }})" class="reward-delete-btn" title="Delete">🗑️</button>
     </div>
     {% endfor %}
@@ -121,6 +127,28 @@
             <input type="text" class="form-input" id="rewardDesc" placeholder="Details…">
         </div>
         <button onclick="saveReward()" class="btn btn-primary">Save Reward</button>
+    </div>
+</div>
+
+<!-- Redeem sheet -->
+<div class="overlay" id="redeemOverlay" onclick="closeRedeemSheet(event)">
+    <div class="sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title" id="redeemTitle">🎁 Redeem Reward</div>
+        <input type="hidden" id="redeemRewardId">
+        <input type="hidden" id="redeemCost">
+        <div class="form-group">
+            <label class="form-label">Who is redeeming?</label>
+            <select class="form-input" id="redeemMember">
+                {% for m in members %}
+                <option value="{{ m.id }}" data-pts="{{ m.points }}">{{ m.avatar }} {{ m.name }} — {{ m.points }}pts</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div id="redeemWarning" style="color:var(--red);font-size:15px;margin-bottom:12px;display:none;">
+            ⚠️ Not enough points!
+        </div>
+        <button onclick="submitRedeem()" class="btn btn-primary">🎁 Redeem Now</button>
     </div>
 </div>
 
@@ -193,6 +221,44 @@ function showMemberDetail(memberId, memberName, memberAvatar) {
 function closeMemberDetail() {
     document.getElementById('memberDetailPanel').classList.remove('show');
     window.location.reload();
+}
+
+/* ── Redeem ── */
+const MEMBER_PTS = { {% for m in members %}{{ m.id }}: {{ m.points }},{% endfor %} };
+function openRedeemSheet(rewardId, rewardName, cost) {
+    document.getElementById('redeemRewardId').value = rewardId;
+    document.getElementById('redeemCost').value      = cost;
+    document.getElementById('redeemTitle').textContent = '🎁 ' + rewardName + ' (' + cost + 'pts)';
+    document.getElementById('redeemWarning').style.display = 'none';
+    document.getElementById('redeemOverlay').classList.add('show');
+}
+function closeRedeemSheet(e) {
+    if (e.target === document.getElementById('redeemOverlay'))
+        document.getElementById('redeemOverlay').classList.remove('show');
+}
+function submitRedeem() {
+    const rewardId = parseInt(document.getElementById('redeemRewardId').value);
+    const cost     = parseInt(document.getElementById('redeemCost').value);
+    const memberId = parseInt(document.getElementById('redeemMember').value);
+    const have     = MEMBER_PTS[memberId] || 0;
+    if (have < cost) {
+        document.getElementById('redeemWarning').style.display = 'block';
+        document.getElementById('redeemWarning').textContent = `⚠️ Not enough points (have ${have}, need ${cost})`;
+        return;
+    }
+    fetch('/api/redeem-reward', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reward_id: rewardId, member_id: memberId})
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            MEMBER_PTS[memberId] -= cost;
+            showToast('🎉 Redeemed!');
+            document.getElementById('redeemOverlay').classList.remove('show');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('⚠️ ' + (d.error || 'Could not redeem'));
+        }
+    });
 }
 
 function showRewardSheet() { document.getElementById('rewardOverlay').classList.add('show'); }

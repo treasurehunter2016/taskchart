@@ -73,15 +73,22 @@
 .member-toggle {
     display: flex; align-items: center; gap: 12px; padding: 11px 14px;
     background: var(--bg3); border-radius: 10px; cursor: pointer;
-    border: 1.5px solid transparent; transition: all .2s;
+    border: 2px solid transparent; transition: all .2s;
 }
-.member-toggle.selected { border-color: var(--accent); background: var(--accent)11; }
+.member-toggle.selected { border-color: var(--accent); background: var(--accent)33; }
+[data-theme="green"] .member-toggle.selected {
+    background: #cfe8cf; border-color: #2d7d32; border-width: 2px;
+}
 .toggle-check {
-    width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border);
+    width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border);
     display: flex; align-items: center; justify-content: center; margin-left: auto;
-    font-size: 12px; flex-shrink: 0; transition: all .2s;
+    font-size: 13px; flex-shrink: 0; transition: all .2s;
 }
 .member-toggle.selected .toggle-check { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Save/Delete row */
+.form-action-row { display: flex; gap: 8px; }
+.form-action-row .btn { flex: 1; }
 </style>
 {% endblock %}
 
@@ -180,7 +187,7 @@
     <div class="form-group">
         <label class="form-label">Schedule</label>
         <div class="pill-row" id="scheduleType">
-            {% for val, label in [('daily','☀️ Daily'),('weekdays','🗓️ Weekdays'),('weekends','🏖️ Weekends'),('specific','📌 Specific Days'),('as_needed','🆘 As Needed')] %}
+            {% for val, label in [('daily','Daily'),('weekdays','Weekdays'),('weekends','Weekends'),('specific','Specific Days'),('as_needed','As Needed')] %}
             <button class="pill {% if (chore and chore.schedule_type==val) or (not chore and val=='daily') %}active{% endif %}"
                     onclick="setScheduleType('{{ val }}', this)">{{ label }}</button>
             {% endfor %}
@@ -199,14 +206,17 @@
         </div>
     </div>
 
-    <!-- Delete (edit mode) -->
-    {% if chore %}
+    <!-- Save + Delete -->
     <div class="form-group" style="margin-top:8px;">
-        <button onclick="deleteChore()" class="btn btn-danger">
-            🗑️ Delete Chore
-        </button>
+        {% if chore %}
+        <div class="form-action-row">
+            <button onclick="doSave()" class="btn btn-primary">💾 Save</button>
+            <button onclick="deleteChore()" class="btn btn-danger">🗑️ Delete</button>
+        </div>
+        {% else %}
+        <button onclick="doSave()" class="btn btn-primary">💾 Save Task</button>
+        {% endif %}
     </div>
-    {% endif %}
 
     <div style="height:20px;"></div>
 </div>

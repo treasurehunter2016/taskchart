@@ -114,9 +114,14 @@ SCHEMA_MIGRATIONS = {
         );
         UPDATE schema_version SET version = 5;
     ''',
+    # v6: scheduled_time on daily_claims for calendar time-slot scheduling.
+    6: '''
+        ALTER TABLE daily_claims ADD COLUMN scheduled_time TEXT DEFAULT NULL;
+        UPDATE schema_version SET version = 6;
+    ''',
 }
 
-CURRENT_SCHEMA_VERSION = 5
+CURRENT_SCHEMA_VERSION = 6
 GOAL_UNITS = ['pages', 'min', 'hr', 'chapters', '个', '次']
 
 def init_db():
@@ -328,8 +333,44 @@ def edit_task(task_id):
 
 @app.route('/today')
 def today_page():
+    today_str  = date.today().isoformat()
+    today_date = date.today()
+
+    # Auto-claim all scheduled tasks for today so they appear without manual claiming.
+    # Uses INSERT OR IGNORE so existing claims (with progress/goal) are preserved.
+    with _write_lock:
+        conn = get_db()
+        try:
+            members_all = [dict(m) for m in conn.execute('SELECT * FROM members ORDER BY sort_order, id')]
+            tasks_all   = [dict(t) for t in conn.execute('SELECT * FROM chores WHERE active=1 ORDER BY sort_order, id').fetchall()]
+            all_member_ids = [m['id'] for m in members_all]
+            # Get today's existing completions to seed completed state
+            done_set = {(r['chore_id'], r['member_id'])
+                        for r in conn.execute('SELECT chore_id, member_id FROM completions WHERE date=?', (today_str,)).fetchall()}
+            for task in tasks_all:
+                if not is_chore_due(task, today_date):
+                    continue
+                for mid in get_assigned_member_ids(task, all_member_ids, conn):
+                    already_done = 1 if (task['id'], mid) in done_set else 0
+                    conn.execute('''
+                        INSERT OR IGNORE INTO daily_claims
+                            (task_id, member_id, date, goal_amount, goal_unit, progress, completed)
+                        VALUES (?, ?, ?, NULL, NULL, 0, ?)
+                    ''', (task['id'], mid, today_str, already_done))
+            # Sync any pre-existing completions into already-existing claims
+            conn.execute('''
+                UPDATE daily_claims SET completed=1
+                WHERE date=? AND completed=0
+                  AND EXISTS (SELECT 1 FROM completions
+                              WHERE completions.chore_id  = daily_claims.task_id
+                                AND completions.member_id = daily_claims.member_id
+                                AND completions.date      = daily_claims.date)
+            ''', (today_str,))
+            conn.commit()
+        finally:
+            conn.close()
+
     conn = get_db()
-    today_str = date.today().isoformat()
     members = [dict(m) for m in conn.execute('SELECT * FROM members ORDER BY sort_order, id')]
     tasks   = [dict(t) for t in conn.execute('SELECT * FROM chores WHERE active=1 ORDER BY sort_order, id').fetchall()]
     raw_claims = conn.execute('''
@@ -367,7 +408,7 @@ def today_page():
         members=members, tasks=tasks,
         task_rows=task_rows, cells=cells,
         member_totals=member_totals,
-        today=date.today(), today_str=today_str,
+        today=today_date, today_str=today_str,
         goal_units=GOAL_UNITS)
 
 @app.route('/chart')
@@ -573,9 +614,10 @@ def claim_task():
 @app.route('/api/update-claim', methods=['POST'])
 def update_claim():
     data = request.json
-    claim_id  = data['claim_id']
-    progress  = data.get('progress')
-    completed = data.get('completed')
+    claim_id       = data['claim_id']
+    progress       = data.get('progress')
+    completed      = data.get('completed')
+    scheduled_time = data.get('scheduled_time')  # "HH:MM" or None
     with _write_lock:
         conn = get_db()
         try:
@@ -583,6 +625,19 @@ def update_claim():
                 conn.execute('UPDATE daily_claims SET progress=? WHERE id=?', (progress, claim_id))
             if completed is not None:
                 conn.execute('UPDATE daily_claims SET completed=? WHERE id=?', (int(completed), claim_id))
+                # Sync to completions table so Chart and Points stay in sync
+                claim = conn.execute(
+                    'SELECT task_id, member_id, date FROM daily_claims WHERE id=?', (claim_id,)).fetchone()
+                if claim:
+                    if completed:
+                        conn.execute('''INSERT OR IGNORE INTO completions (chore_id, member_id, date)
+                                       VALUES (?,?,?)''', (claim['task_id'], claim['member_id'], claim['date']))
+                    else:
+                        conn.execute('''DELETE FROM completions
+                                       WHERE chore_id=? AND member_id=? AND date=?''',
+                                     (claim['task_id'], claim['member_id'], claim['date']))
+            if scheduled_time is not None:
+                conn.execute('UPDATE daily_claims SET scheduled_time=? WHERE id=?', (scheduled_time or None, claim_id))
             conn.commit()
         finally:
             conn.close()
@@ -750,6 +805,29 @@ def delete_member():
         finally:
             conn.close()
     return jsonify({'success': True})
+
+@app.route('/api/redeem-reward', methods=['POST'])
+def redeem_reward():
+    data = request.json
+    reward_id = data['reward_id']
+    member_id = data['member_id']
+    with _write_lock:
+        conn = get_db()
+        try:
+            reward = conn.execute('SELECT * FROM rewards WHERE id=?', (reward_id,)).fetchone()
+            if not reward:
+                return jsonify({'error': 'Reward not found'})
+            current_pts = calc_points(member_id, conn)
+            if current_pts < reward['points_cost']:
+                return jsonify({'error': 'Not enough points',
+                                'have': current_pts, 'need': reward['points_cost']})
+            conn.execute(
+                'INSERT INTO balance_history (member_id, points_delta, reason) VALUES (?,?,?)',
+                (member_id, -reward['points_cost'], f'🎁 Redeemed: {reward["name"]}'))
+            conn.commit()
+            return jsonify({'success': True})
+        finally:
+            conn.close()
 
 @app.route('/api/add-reward', methods=['POST'])
 def add_reward():
