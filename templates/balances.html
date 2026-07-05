@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% set active_tab = "balances" %}
+{% block title %}Balances{% endblock %}
+
+{% block head %}
+<style>
+.member-balance-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    cursor: pointer;
+}
+.member-balance-row:last-child { border-bottom: none; }
+.member-balance-row:active { background: var(--bg3); }
+.balance-pts { font-size: 20px; font-weight: 700; color: var(--accent); margin-right: 4px; }
+
+/* Reward row */
+.reward-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+}
+.reward-row:last-child { border-bottom: none; }
+.pts-cost { font-size: 18px; font-weight: 700; color: var(--green); }  /* green, not red/yellow */
+.reward-delete-btn {
+    background: none; border: none; color: var(--text3);
+    font-size: 20px; cursor: pointer; padding: 4px; opacity: .6;
+}
+.reward-delete-btn:active { opacity: 1; }
+
+/* Detail panel */
+.detail-panel {
+    display: none; position: fixed; inset: 0; background: var(--bg); z-index: 500;
+    overflow-y: auto; padding-bottom: 100px;
+}
+.detail-panel.show { display: block; }
+.history-row {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+}
+.history-reason { font-size: 18px; flex: 1; }
+.history-date   { font-size: 15px; color: var(--text3); margin-top: 2px; }
+.history-pts    { font-size: 20px; font-weight: 700; }
+.history-pts.positive { color: var(--green); }
+.history-pts.negative { color: var(--red); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <span class="page-title">💰 Balances</span>
+    <button onclick="showAdjustSheet()" style="background:none;border:none;color:var(--accent);font-size:20px;cursor:pointer;">+Adjust</button>
+</div>
+
+<!-- Members -->
+<div class="card">
+    {% for m in members %}
+    <div class="member-balance-row" onclick="showMemberDetail({{ m.id }}, '{{ m.name }}', '{{ m.avatar }}')">
+        <div class="avatar" style="background:{{ m.color }}22;">{{ m.avatar }}</div>
+        <div style="flex:1;">
+            <div class="list-row-title fw-700">{{ m.name }}</div>
+        </div>
+        <span class="balance-pts">{{ m.points }}</span>
+        <span style="color:var(--text3);font-size:17px;">Points ›</span>
+    </div>
+    {% endfor %}
+</div>
+<div class="section-label" style="color:var(--text3);font-size:15px;padding:0 20px 12px;">
+    Tap a profile to see history and adjust balances.
+</div>
+
+<!-- Rewards -->
+<div class="section-label">🎁 Rewards</div>
+{% if rewards %}
+<div class="card">
+    {% for r in rewards %}
+    <div class="reward-row">
+        <div style="font-size:27px;">🎁</div>
+        <div style="flex:1;">
+            <div class="list-row-title">{{ r.name }}</div>
+            {% if r.description %}<div class="list-row-sub">{{ r.description }}</div>{% endif %}
+        </div>
+        <span class="pts-cost">{{ r.points_cost }}pts</span>
+        <button onclick="deleteReward({{ r.id }})" class="reward-delete-btn" title="Delete">🗑️</button>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card" style="padding:24px;text-align:center;color:var(--text3);font-size:18px;">No rewards yet — create one!</div>
+{% endif %}
+
+<div style="margin:0 0 12px;">
+    <button onclick="showRewardSheet()" class="btn btn-ghost btn-block">
+        🎁 Create a Reward
+    </button>
+</div>
+
+<!-- Member detail panel -->
+<div id="memberDetailPanel" class="detail-panel">
+    <div class="page-header">
+        <button onclick="closeMemberDetail()" style="background:none;border:none;color:var(--accent);font-size:20px;cursor:pointer;">✕ Close</button>
+        <span id="detailMemberName" class="page-title" style="font-size:23px;"></span>
+        <span></span>
+    </div>
+    <div id="detailHistory"></div>
+</div>
+
+<!-- Add Reward sheet -->
+<div class="overlay" id="rewardOverlay" onclick="closeRewardSheet(event)">
+    <div class="sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">🎁 Create a Reward</div>
+        <div class="form-group">
+            <label class="form-label">Reward Name</label>
+            <input type="text" class="form-input" id="rewardName" placeholder="e.g. Movie Night">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Points Cost</label>
+            <input type="number" class="form-input" id="rewardCost" placeholder="50" min="1">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Description (optional)</label>
+            <input type="text" class="form-input" id="rewardDesc" placeholder="Details…">
+        </div>
+        <button onclick="saveReward()" class="btn btn-primary">Save Reward</button>
+    </div>
+</div>
+
+<!-- Balance adjustment sheet -->
+<div class="overlay" id="adjustOverlay" onclick="closeAdjustSheet(event)">
+    <div class="sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">⚖️ Adjust Balance</div>
+        <div class="form-group">
+            <label class="form-label">Member</label>
+            <select class="form-input" id="adjustMember" style="color:var(--text);">
+                {% for m in members %}
+                <option value="{{ m.id }}">{{ m.avatar }} {{ m.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Points (use negative to deduct)</label>
+            <input type="number" class="form-input" id="adjustPts" placeholder="+10 or -5">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Reason</label>
+            <input type="text" class="form-input" id="adjustReason" placeholder="Bonus, spending, etc.">
+        </div>
+        <button onclick="saveAdjust()" class="btn btn-primary">Apply Adjustment</button>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const memberHistory = {{ history | tojson }};
+
+function showMemberDetail(memberId, memberName, memberAvatar) {
+    document.getElementById('detailMemberName').textContent = memberAvatar + ' ' + memberName;
+    const hist = memberHistory[String(memberId)] || memberHistory[memberId] || [];
+    const container = document.getElementById('detailHistory');
+
+    if (!hist.length) {
+        container.innerHTML = '<div class="card" style="padding:28px;text-align:center;color:var(--text3);font-size:18px;">No history yet — complete some chores!</div>';
+    } else {
+        container.innerHTML = '<div class="card">' + hist.map(h => {
+            const sign = h.points_delta >= 0 ? '+' : '';
+            const cls  = h.points_delta >= 0 ? 'positive' : 'negative';
+            // Try to parse date — created_at might be "2026-07-05T12:00:00" or timestamp
+            let dateStr = '';
+            try { dateStr = new Date(h.created_at).toLocaleDateString(); } catch(e) { dateStr = h.created_at || ''; }
+
+            let label = '';
+            if (h.type === 'completion') {
+                label = (h.chore_icon || '✅') + ' ' + (h.chore_name || 'Chore completed');
+            } else {
+                label = h.reason || 'Manual adjustment';
+            }
+
+            return `<div class="history-row">
+                <div style="flex:1;">
+                    <div class="history-reason">${label}</div>
+                    <div class="history-date">${dateStr}</div>
+                </div>
+                <div class="history-pts ${cls}">${sign}${h.points_delta}</div>
+            </div>`;
+        }).join('') + '</div>';
+    }
+
+    document.getElementById('memberDetailPanel').classList.add('show');
+}
+
+function closeMemberDetail() {
+    document.getElementById('memberDetailPanel').classList.remove('show');
+    window.location.reload();
+}
+
+function showRewardSheet() { document.getElementById('rewardOverlay').classList.add('show'); }
+function closeRewardSheet(e) {
+    if (e.target === document.getElementById('rewardOverlay'))
+        document.getElementById('rewardOverlay').classList.remove('show');
+}
+
+function saveReward() {
+    const name = document.getElementById('rewardName').value.trim();
+    const cost = parseInt(document.getElementById('rewardCost').value);
+    if (!name || !cost) { showToast('⚠️ Please fill in name and points cost'); return; }
+    fetch('/api/add-reward', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name, points_cost: cost, description: document.getElementById('rewardDesc').value})
+    }).then(() => window.location.reload());
+}
+
+function deleteReward(id) {
+    if (!confirm('Delete this reward?')) return;
+    fetch('/api/delete-reward', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reward_id: id})
+    }).then(() => window.location.reload());
+}
+
+function showAdjustSheet() { document.getElementById('adjustOverlay').classList.add('show'); }
+function closeAdjustSheet(e) {
+    if (e.target === document.getElementById('adjustOverlay'))
+        document.getElementById('adjustOverlay').classList.remove('show');
+}
+
+function saveAdjust() {
+    const memberId = parseInt(document.getElementById('adjustMember').value);
+    const pts      = parseInt(document.getElementById('adjustPts').value);
+    const reason   = document.getElementById('adjustReason').value;
+    if (!pts) { showToast('⚠️ Enter a point amount'); return; }
+    fetch('/api/adjust-balance', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({member_id: memberId, points_delta: pts, reason})
+    }).then(() => window.location.reload());
+}
+</script>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% set active_tab = "household" %}
+{% block title %}Household{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <span class="page-title">🏠 Household</span>
+    <a href="/settings" class="header-action">Edit</a>
+</div>
+
+{% if members %}
+<div class="card">
+    {% for m in members %}
+    <a href="/member/{{ m.id }}" class="list-row" style="text-decoration:none;color:inherit;">
+        <div class="avatar" style="background:{{ m.color }}22;">
+            <span style="font-size:28px;">{{ m.avatar }}</span>
+        </div>
+        <div class="list-row-info">
+            <div class="list-row-title fw-700">
+                {{ m.name }}
+                {% if m.streak > 0 %}
+                <span class="streak-badge" style="margin-left:6px;">🔥 {{ m.streak }}d</span>
+                {% endif %}
+            </div>
+            {% if m.due_today > 0 %}
+            <div class="list-row-sub text-accent">😴 {{ m.due_today }} Due Today</div>
+            {% else %}
+            <div class="list-row-sub text-green">🌟 All caught up!</div>
+            {% endif %}
+        </div>
+        <div class="list-row-right">
+            {% if m.due_today == 0 %}
+            <span style="font-size:20px;">✅</span>
+            {% else %}
+            <span style="font-size:16px;background:var(--accent);color:#fff;border-radius:12px;padding:2px 10px;font-weight:700;">{{ m.due_today }}</span>
+            {% endif %}
+            <span style="color:var(--text3);">›</span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">👨‍👩‍👧‍👦</div>
+    <div class="empty-state-text">No family members yet.<br>Add someone to get started!</div>
+</div>
+{% endif %}
+
+<div style="margin-top:8px;">
+    <a href="/settings" class="btn btn-ghost btn-block" style="display:flex;justify-content:center;align-items:center;gap:8px;">
+        ➕ Add Family Member
+    </a>
+</div>
+
+{% if members %}
+<div class="section-label" style="margin-top:8px;">Quick Links</div>
+<div class="card">
+    <a href="/chores/new" class="list-row" style="color:var(--accent);text-decoration:none;">
+        <span style="font-size:24px;">✂️</span>
+        <div class="list-row-info">
+            <div class="list-row-title">Create a New Chore</div>
+        </div>
+        <span>›</span>
+    </a>
+    <a href="/chart" class="list-row" style="color:var(--accent);text-decoration:none;">
+        <span style="font-size:24px;">📊</span>
+        <div class="list-row-info">
+            <div class="list-row-title">View Weekly Chart</div>
+        </div>
+        <span>›</span>
+    </a>
+    <a href="/balances" class="list-row" style="color:var(--accent);text-decoration:none;">
+        <span style="font-size:24px;">🏆</span>
+        <div class="list-row-info">
+            <div class="list-row-title">Check Balances & Rewards</div>
+        </div>
+        <span>›</span>
+    </a>
+</div>
+{% endif %}
+{% endblock %}

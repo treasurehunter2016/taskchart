@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% set active_tab = "settings" %}
+{% block title %}Settings{% endblock %}
+
+{% block head %}
+<style>
+.settings-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+}
+.settings-row:last-child { border-bottom: none; }
+.edit-btn   { background: none; border: none; color: var(--accent); font-size: 15px; cursor: pointer; }
+.delete-btn { background: none; border: none; color: var(--red);    font-size: 20px; cursor: pointer; padding: 2px 6px; }
+
+/* Theme toggle */
+.theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.theme-card {
+    border-radius: 14px; padding: 16px; cursor: pointer;
+    border: 2.5px solid transparent; transition: border-color .2s;
+    display: flex; flex-direction: column; gap: 6px;
+}
+.theme-card.selected { border-color: var(--accent); }
+.theme-preview { border-radius: 8px; height: 56px; display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 4px; }
+.theme-name { font-size: 14px; font-weight: 600; }
+.theme-desc { font-size: 12px; color: var(--text3); }
+
+/* Avatar picker */
+.avatar-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.avatar-opt {
+    width: 48px; height: 48px; border-radius: 50%; border: 3px solid transparent;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; cursor: pointer; background: var(--bg3);
+    transition: border-color .15s;
+}
+.avatar-opt.selected { border-color: var(--accent); }
+
+/* Color picker */
+.color-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.color-opt {
+    width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+    border: 3px solid transparent; transition: border-color .15s;
+}
+.color-opt.selected { border-color: var(--text); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <span class="page-title">⚙️ Settings</span>
+</div>
+
+<!-- Theme selector -->
+<div class="section-label">🎨 Appearance</div>
+<div style="margin: 0 16px 20px;">
+    <div class="theme-grid">
+        <div class="theme-card selected" id="themeDark"
+             style="background:#1c1c1e;" onclick="applyTheme('dark')">
+            <div class="theme-preview" style="background:#000;">🌙</div>
+            <div class="theme-name" style="color:#fff;">Dark</div>
+            <div class="theme-desc" style="color:#8e8e93;">Classic dark mode</div>
+        </div>
+        <div class="theme-card" id="themeGreen"
+             style="background:#fff;" onclick="applyTheme('green')">
+            <div class="theme-preview" style="background:#e4efe4;">🌿</div>
+            <div class="theme-name" style="color:#1a2e1a;">Light Green</div>
+            <div class="theme-desc" style="color:#5a7a5c;">Eye-friendly nature</div>
+        </div>
+    </div>
+</div>
+
+<!-- Family members -->
+<div class="section-label">👨‍👩‍👧 Family Members</div>
+{% if members %}
+<div class="card">
+    {% for m in members %}
+    <div class="settings-row">
+        <div class="avatar" style="background:{{ m.color }}22;">{{ m.avatar }}</div>
+        <div style="flex:1;">
+            <div class="list-row-title fw-700">{{ m.name }}</div>
+        </div>
+        <button class="edit-btn" onclick="openEditMember({{ m.id }},'{{ m.name }}','{{ m.avatar }}','{{ m.color }}')">
+            Edit
+        </button>
+        <button class="delete-btn" onclick="doDeleteMember({{ m.id }},'{{ m.name }}')">🗑️</button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div style="margin:0 0 24px;">
+    <button onclick="openAddMember()" class="btn btn-ghost btn-block">
+        ➕ Add Family Member
+    </button>
+</div>
+
+<div class="section-label">ℹ️ About</div>
+<div class="card">
+    <div class="list-row">
+        <div class="list-row-info">
+            <div class="list-row-title">🏠 Chore Chart</div>
+            <div class="list-row-sub">Family chore tracking app · v1.1</div>
+        </div>
+        <div class="list-row-right text-secondary">SQLite · Auto-save</div>
+    </div>
+    <div class="list-row">
+        <div class="list-row-info">
+            <div class="list-row-title">💾 Data Storage</div>
+            <div class="list-row-sub">Persisted locally in chores.db · SQLite WAL</div>
+        </div>
+        <div class="list-row-right text-green">✓ Safe</div>
+    </div>
+    <a href="/admin" class="list-row" style="text-decoration:none;color:var(--accent);">
+        <div class="list-row-info">
+            <div class="list-row-title">🔧 Admin Dashboard</div>
+            <div class="list-row-sub">Stats, version history, system actions</div>
+        </div>
+        <span>›</span>
+    </a>
+</div>
+
+<!-- Add / Edit Member sheet -->
+<div class="overlay" id="memberOverlay" onclick="closeMemberSheet(event)">
+    <div class="sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title" id="memberSheetTitle">Add Family Member</div>
+
+        <div class="form-group">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-input" id="memberName" placeholder="e.g. Lucas 🏴‍☠️">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Avatar Emoji</label>
+            <div class="avatar-grid" id="avatarGrid">
+                {% set avatars = [
+                    '🙂','😊','😎','🤩','🥳','😄','🤗','🤠','🧐','😸',
+                    '🐶','🐱','🐻','🦊','🐼','🐨','🐯','🦁','🐸','🐙',
+                    '🦋','🦄','🐧','🦅','🦉','🦊','🐺','🦝','🐮','🐷',
+                    '🧙','🧚','🦸','🦹','🧜','🧝','🧞','🧌','🫅','🤴',
+                    '👨‍🚀','👩‍🚀','👨‍🎨','👩‍🎨','👨‍🍳','👩‍🍳','👨‍💻','👩‍💻','👨‍🔬','👩‍🔬',
+                    '🌟','⭐','🌈','🎯','🏆','🔥','💎','🌺','🌸','🍀',
+                    '🚀','🛸','🎭','🃏','🧩','🎪','🪄','🎠','🎡','🎢',
+                ] %}
+                {% for av in avatars %}
+                <div class="avatar-opt {% if loop.first %}selected{% endif %}"
+                     onclick="selectAvatar('{{ av }}', this)" data-av="{{ av }}">{{ av }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Color</label>
+            <div class="color-grid">
+                {% set colors = ['#007AFF','#FF9F0A','#30D158','#BF5AF2','#FF453A','#64D2FF','#FF6961','#AC8E68','#FF375F','#00C7BE','#5AC8FA','#FF2D55'] %}
+                {% for c in colors %}
+                <div class="color-opt {% if loop.first %}selected{% endif %}"
+                     style="background:{{ c }};"
+                     onclick="selectColor('{{ c }}', this)" data-color="{{ c }}"></div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <button onclick="saveMember()" class="btn btn-primary">💾 Save Member</button>
+    </div>
+</div>
+
+<input type="hidden" id="editMemberId"  value="">
+<input type="hidden" id="pickedAvatar"  value="🙂">
+<input type="hidden" id="pickedColor"   value="#007AFF">
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── Theme ── */
+function applyTheme(name) {
+    setTheme(name);
+    document.getElementById('themeDark').classList.toggle('selected',  name === 'dark');
+    document.getElementById('themeGreen').classList.toggle('selected', name === 'green');
+    showToast(name === 'dark' ? '🌙 Dark mode' : '🌿 Light green mode', 1800);
+}
+// Sync theme cards on load
+(function() {
+    const t = currentTheme();
+    document.getElementById('themeDark').classList.toggle('selected',  t === 'dark');
+    document.getElementById('themeGreen').classList.toggle('selected', t === 'green');
+})();
+
+/* ── Avatar / color pickers ── */
+function selectAvatar(av, el) {
+    document.querySelectorAll('.avatar-opt').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('pickedAvatar').value = av;
+}
+function selectColor(color, el) {
+    document.querySelectorAll('.color-opt').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('pickedColor').value = color;
+}
+
+/* ── Member sheet ── */
+function openAddMember() {
+    document.getElementById('memberSheetTitle').textContent = '➕ Add Family Member';
+    document.getElementById('memberName').value  = '';
+    document.getElementById('editMemberId').value = '';
+    document.querySelectorAll('.avatar-opt').forEach((e,i) => e.classList.toggle('selected', i===0));
+    document.querySelectorAll('.color-opt').forEach((e,i) => e.classList.toggle('selected', i===0));
+    document.getElementById('pickedAvatar').value = '🙂';
+    document.getElementById('pickedColor').value  = '#007AFF';
+    document.getElementById('memberOverlay').classList.add('show');
+    setTimeout(() => document.getElementById('memberName').focus(), 300);
+}
+function openEditMember(id, name, avatar, color) {
+    document.getElementById('memberSheetTitle').textContent = '✏️ Edit Member';
+    document.getElementById('memberName').value   = name;
+    document.getElementById('editMemberId').value = id;
+    document.getElementById('pickedAvatar').value = avatar;
+    document.getElementById('pickedColor').value  = color;
+    document.querySelectorAll('.avatar-opt').forEach(e =>
+        e.classList.toggle('selected', e.dataset.av === avatar));
+    document.querySelectorAll('.color-opt').forEach(e =>
+        e.classList.toggle('selected', e.dataset.color === color));
+    document.getElementById('memberOverlay').classList.add('show');
+}
+function closeMemberSheet(e) {
+    if (e.target === document.getElementById('memberOverlay'))
+        document.getElementById('memberOverlay').classList.remove('show');
+}
+function saveMember() {
+    const name = document.getElementById('memberName').value.trim();
+    if (!name) { showToast('⚠️ Please enter a name'); return; }
+    const editId = document.getElementById('editMemberId').value;
+    const body   = {
+        name,
+        avatar: document.getElementById('pickedAvatar').value,
+        color:  document.getElementById('pickedColor').value,
+    };
+    if (editId) body.id = parseInt(editId);
+    fetch(editId ? '/api/update-member' : '/api/add-member', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify(body),
+    }).then(() => {
+        showToast(editId ? '✅ Member updated' : '🎉 Member added!');
+        setTimeout(() => location.reload(), 800);
+    });
+}
+function doDeleteMember(id, name) {
+    if (!confirm(`Remove ${name}? Their chore history stays in the database.`)) return;
+    fetch('/api/delete-member', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({member_id: id}),
+    }).then(() => { showToast('🗑️ Member removed'); setTimeout(() => location.reload(), 800); });
+}
+</script>
+{% endblock %}

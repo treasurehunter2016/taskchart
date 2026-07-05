@@ -1,0 +1,17 @@
+# SQLite database files
+chores.db
+chores.db-shm
+chores.db-wal
+
+# Local config (contains secrets)
+config.py
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# macOS
+.DS_Store

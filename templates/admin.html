@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+{% set active_tab = "" %}
+{% block title %}Admin — TaskChart{% endblock %}
+
+{% block head %}
+<style>
+/* ── Admin layout ── */
+.admin-header {
+    padding: 56px 20px 12px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+}
+.admin-title { font-size: 30px; font-weight: 700; }
+.admin-sub   { font-size: 16px; color: var(--text3); margin-top: 2px; }
+.back-link   { color: var(--accent); font-size: 20px; text-decoration: none; }
+
+/* ── Stat cards ── */
+.stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin: 0 16px 16px;
+}
+.stat-card {
+    background: var(--bg2); border-radius: 14px; padding: 16px;
+    box-shadow: 0 1px 4px var(--shadow);
+}
+.stat-value { font-size: 28px; font-weight: 700; color: var(--accent); line-height: 1; }
+.stat-label { font-size: 15px; color: var(--text3); margin-top: 4px; }
+
+/* ── Version history table ── */
+.version-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.version-table th {
+    text-align: left; padding: 8px 12px;
+    font-size: 13px; font-weight: 600; color: var(--text3);
+    text-transform: uppercase; letter-spacing: .4px;
+    border-bottom: 1px solid var(--border);
+}
+.version-table td {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+.version-table tr:last-child td { border-bottom: none; }
+.version-row-active  { background: var(--bg2); }
+.version-row-legacy  { background: var(--bg); opacity: .65; }
+.version-badge {
+    display: inline-block; font-size: 12px; font-weight: 700;
+    padding: 2px 7px; border-radius: 10px;
+}
+.badge-active { background: var(--green)22;  color: var(--green); }
+.badge-legacy { background: var(--text3)22;  color: var(--text3); }
+.chain-spacer { height: 8px; background: var(--bg); }
+
+/* ── Recent activity ── */
+.activity-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+}
+.activity-row:last-child { border-bottom: none; }
+.activity-date { font-size: 14px; color: var(--text3); white-space: nowrap; }
+
+/* ── Top charts (bars) ── */
+.bar-row { display: flex; align-items: center; gap: 10px; padding: 8px 16px; }
+.bar-label { width: 100px; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { flex: 1; height: 8px; background: var(--bg3); border-radius: 4px; }
+.bar-fill  { height: 100%; border-radius: 4px; background: var(--accent); transition: width .4s; }
+.bar-count { font-size: 15px; color: var(--text3); min-width: 32px; text-align: right; }
+
+/* ── Actions ── */
+.action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 16px 16px; }
+.action-btn {
+    border: none; border-radius: 12px; padding: 14px 12px;
+    font-size: 16px; font-weight: 600; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    transition: opacity .15s; background: var(--bg2);
+    box-shadow: 0 1px 4px var(--shadow);
+}
+.action-btn:active { opacity: .7; }
+.action-icon { font-size: 26px; }
+.action-result { font-size: 14px; color: var(--green); margin-top: 4px; min-height: 18px; }
+
+/* ── System info ── */
+.sysinfo-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 16px;
+}
+.sysinfo-row:last-child { border-bottom: none; }
+.sysinfo-val { color: var(--accent); font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <div class="admin-title">🔧 Admin</div>
+        <div class="admin-sub">TaskChart · Schema v{{ schema_version }}</div>
+    </div>
+    <a href="/settings" class="back-link">← Settings</a>
+</div>
+
+<!-- ── Stats overview ── -->
+<div class="section-label">📊 Overview</div>
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ row_counts.get('members', 0) }}</div>
+        <div class="stat-label">👥 Family Members</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ row_counts.get('chores_active', 0) }}</div>
+        <div class="stat-label">✂️ Active Chores</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ row_counts.get('completions', 0) }}</div>
+        <div class="stat-label">✅ Total Completions</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ db_size }}</div>
+        <div class="stat-label">💾 Database Size</div>
+    </div>
+</div>
+
+<!-- ── System info ── -->
+<div class="section-label">⚙️ System Info</div>
+<div class="card">
+    <div class="sysinfo-row">
+        <span>Schema version</span><span class="sysinfo-val">v{{ schema_version }}</span>
+    </div>
+    <div class="sysinfo-row">
+        <span>SQLite version</span><span class="sysinfo-val">{{ sqlite_version }}</span>
+    </div>
+    <div class="sysinfo-row">
+        <span>Server uptime</span><span class="sysinfo-val">{{ uptime }}</span>
+    </div>
+    <div class="sysinfo-row">
+        <span>Total table rows</span>
+        <span class="sysinfo-val">
+            {% set total = row_counts.values() | sum %}{{ total }}
+        </span>
+    </div>
+    {% if date_range.first_date %}
+    <div class="sysinfo-row">
+        <span>Data range</span>
+        <span class="sysinfo-val" style="font-size:14px;">
+            {{ date_range.first_date }} → {{ date_range.last_date }}
+        </span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ── Row counts ── -->
+<div class="section-label">🗄️ Table Sizes</div>
+<div class="card">
+    {% for table, count in row_counts.items() %}
+    {% if table != 'chores_active' %}
+    <div class="sysinfo-row">
+        <span style="font-family:monospace;font-size:15px;">{{ table }}</span>
+        <span class="sysinfo-val">{{ count }} rows</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+
+<!-- ── Top members ── -->
+{% if top_members %}
+{% set max_m = top_members[0].total or 1 %}
+<div class="section-label">🏆 Top by Completions — Members</div>
+<div class="card" style="padding:8px 0;">
+    {% for m in top_members %}
+    <div class="bar-row">
+        <div class="bar-label">{{ m.avatar }} {{ m.name }}</div>
+        <div class="bar-track">
+            <div class="bar-fill" style="width:{{ (m.total / max_m * 100) | int }}%;"></div>
+        </div>
+        <div class="bar-count">{{ m.total }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── Top chores ── -->
+{% if top_chores %}
+{% set max_c = top_chores[0].total or 1 %}
+<div class="section-label">🔥 Top by Completions — Chores</div>
+<div class="card" style="padding:8px 0;">
+    {% for c in top_chores %}
+    <div class="bar-row">
+        <div class="bar-label">{{ c.icon }} {{ c.name }}</div>
+        <div class="bar-track">
+            <div class="bar-fill"
+                 style="width:{{ (c.total / max_c * 100) | int }}%; background:var(--green);"></div>
+        </div>
+        <div class="bar-count">{{ c.total }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── Chore version history ── -->
+<div class="section-label">🌀 Chore Version History</div>
+<div class="card" style="overflow:hidden;">
+<div style="overflow-x:auto;">
+<table class="version-table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Ver</th>
+            <th>Status</th>
+            <th style="text-align:right;">Completions</th>
+            <th style="text-align:right;">Pts</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for chain in chore_chains %}
+        {% for c in chain %}
+        <tr class="{{ 'version-row-active' if c.active else 'version-row-legacy' }}">
+            <td>
+                {% if not loop.first %}
+                <span style="color:var(--text3);margin-right:4px;">↳</span>
+                {% endif %}
+                {{ c.icon }} {{ c.name }}
+            </td>
+            <td style="color:var(--text3);">v{{ c.version or 1 }}</td>
+            <td>
+                {% if c.active %}
+                <span class="version-badge badge-active">Active</span>
+                {% else %}
+                <span class="version-badge badge-legacy">Legacy</span>
+                {% endif %}
+            </td>
+            <td style="text-align:right;font-weight:600;">{{ c.completion_count }}</td>
+            <td style="text-align:right;color:var(--text3);">{{ c.points }}pt</td>
+        </tr>
+        {% endfor %}
+        {% if not loop.last %}
+        <tr class="chain-spacer"><td colspan="5"></td></tr>
+        {% endif %}
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+</div>
+
+<!-- ── Recent activity ── -->
+{% if recent %}
+<div class="section-label">⏱ Recent Completions</div>
+<div class="card">
+    {% for r in recent %}
+    <div class="activity-row">
+        <span style="font-size:22px;">{{ r.member_avatar }}</span>
+        <div style="flex:1;">
+            <div style="font-size:16px;font-weight:500;">{{ r.member_name }}</div>
+            <div style="font-size:14px;color:var(--text3);">{{ r.chore_icon }} {{ r.chore_name }}</div>
+        </div>
+        <div class="activity-date">{{ r.date }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── System actions ── -->
+<div class="section-label">🛠 Actions</div>
+<div class="action-grid">
+    <button class="action-btn" onclick="doVacuum()">
+        <span class="action-icon">🗜️</span>
+        <span>Vacuum DB</span>
+        <span class="action-result" id="vacuumResult"></span>
+    </button>
+    <a href="/api/admin/export" class="action-btn" style="text-decoration:none;color:inherit;">
+        <span class="action-icon">📥</span>
+        <span>Export JSON</span>
+        <span class="action-result">Download backup</span>
+    </a>
+    <button class="action-btn" onclick="doIntegrityCheck()">
+        <span class="action-icon">🔍</span>
+        <span>Integrity Check</span>
+        <span class="action-result" id="integrityResult"></span>
+    </button>
+    <button class="action-btn" onclick="doPurge()" style="color:var(--red);">
+        <span class="action-icon">🗑️</span>
+        <span>Purge Old Data</span>
+        <span class="action-result" id="purgeResult" style="color:var(--text3);">Older than 1 year</span>
+    </button>
+</div>
+
+<div style="height:16px;"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function doVacuum() {
+    const el = document.getElementById('vacuumResult');
+    el.style.color = 'var(--text3)';
+    el.textContent = 'Running…';
+    fetch('/api/admin/vacuum', {method: 'POST'})
+        .then(r => r.json())
+        .then(d => {
+            el.style.color = d.success ? 'var(--green)' : 'var(--red)';
+            el.textContent  = d.success ? '✓ ' + d.new_size : '✗ ' + d.error;
+        });
+}
+
+function doIntegrityCheck() {
+    const el = document.getElementById('integrityResult');
+    el.style.color = 'var(--text3)';
+    el.textContent = 'Checking…';
+    fetch('/api/admin/integrity-check')
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) {
+                el.style.color  = 'var(--green)';
+                el.textContent  = '✓ All clean';
+            } else {
+                el.style.color  = 'var(--red)';
+                el.textContent  = '✗ ' + d.issues.length + ' issue(s)';
+                alert('Integrity issues:\n\n' + d.issues.join('\n'));
+            }
+        });
+}
+
+function doPurge() {
+    const days = parseInt(prompt('Delete completions older than how many days?', '365'));
+    if (!days || days < 1) return;
+    if (!confirm(`This will permanently delete all completions older than ${days} days. Continue?`)) return;
+    const el = document.getElementById('purgeResult');
+    el.textContent = 'Purging…';
+    fetch('/api/admin/purge-completions', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({days})
+    })
+    .then(r => r.json())
+    .then(d => {
+        el.style.color = 'var(--green)';
+        el.textContent = `✓ Deleted ${d.deleted}`;
+        setTimeout(() => location.reload(), 1200);
+    });
+}
+</script>
+{% endblock %}

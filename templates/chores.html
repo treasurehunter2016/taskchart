@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% set active_tab = "chores" %}
+{% block title %}Chores{% endblock %}
+
+{% block head %}
+<style>
+.chore-row { display: flex; align-items: center; padding: 14px 16px; gap: 12px; border-bottom: 1px solid var(--border); }
+.chore-row:last-child { border-bottom: none; }
+.chore-meta { flex: 1; min-width: 0; }
+.chore-name { font-size: 17px; font-weight: 500; }
+.chore-schedule { font-size: 13px; color: var(--text3); margin-top: 2px; }
+.chore-right { display: flex; align-items: center; gap: 8px; }
+.assigned-avatars { display: flex; align-items: center; }
+.add-chore-link {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 16px; color: var(--accent); font-size: 17px; font-weight: 500;
+    cursor: pointer;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <span class="page-title">Chores</span>
+    <a href="/chores/new" class="header-action">＋</a>
+</div>
+
+{% if chores %}
+<div class="card">
+    {% for item in chores %}
+    <div class="chore-row">
+        <div class="chore-icon" style="background:var(--bg3);">{{ item.chore.icon }}</div>
+        <div class="chore-meta">
+            <div class="chore-name">{{ item.chore.name }}</div>
+            <div class="chore-schedule">
+                {% if item.chore.schedule_type == 'daily' %}Every Day
+                {% elif item.chore.schedule_type == 'weekdays' %}Weekdays
+                {% elif item.chore.schedule_type == 'weekends' %}Weekends
+                {% elif item.chore.schedule_type == 'as_needed' %}As Needed
+                {% else %}Custom Schedule{% endif %}
+                {% if item.chore.assignment_type == 'rotate' %} · Rotating{% endif %}
+                {% if item.chore.assignment_type == 'anyone' %} · Anyone{% endif %}
+            </div>
+        </div>
+        <div class="chore-right">
+            <div class="assigned-avatars">
+                {% for m in item.assigned[:4] %}
+                <div class="avatar-sm avatar-overlap" style="background:{{ m.color }}33;font-size:13px;">
+                    {{ m.avatar }}
+                </div>
+                {% endfor %}
+                {% if item.assigned|length > 4 %}
+                <div class="avatar-sm avatar-overlap" style="background:var(--bg3);font-size:11px;color:var(--text3);">
+                    +{{ item.assigned|length - 4 }}
+                </div>
+                {% endif %}
+            </div>
+            {% if item.chore.points > 0 %}
+            <span class="pts-badge">{{ item.chore.points }}pts</span>
+            {% endif %}
+            <a href="/chores/{{ item.chore.id }}/edit" style="color:var(--accent);font-size:15px;padding:4px;">›</a>
+        </div>
+    </div>
+    {% endfor %}
+    <a href="/chores/new" class="add-chore-link">
+        <span>➕</span> Create a New Chore
+    </a>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">✂️</div>
+    <div class="empty-state-text">No chores yet</div>
+    <div style="margin-top:24px;">
+        <a href="/chores/new" class="btn btn-primary" style="display:inline-flex;width:auto;padding:14px 32px;">
+            ➕ Create First Chore
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

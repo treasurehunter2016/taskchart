@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% set active_tab = "household" %}
+{% block title %}{{ member.name }}'s Chores{% endblock %}
+
+{% block head %}
+<style>
+.back-link {
+    display: flex; align-items: center; gap: 4px;
+    color: var(--accent); font-size: 20px; padding: 16px 20px 0;
+    text-decoration: none;
+}
+.member-header {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 20px 20px 12px;
+}
+.member-avatar-lg {
+    width: 80px; height: 80px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 48px; margin-bottom: 10px;
+}
+.member-name  { font-size: 25px; font-weight: 700; }
+.member-pts   { font-size: 19px; color: var(--text3); margin-top: 4px; }
+.member-streak-row { margin-top: 6px; }
+
+/* Week strip */
+.week-strip { display: flex; justify-content: space-between; padding: 0 16px 16px; gap: 4px; }
+.week-day   { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.week-day-label { font-size: 14px; color: var(--text3); font-weight: 600; }
+.week-day-num {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 19px; font-weight: 500;
+}
+.week-day-num.today { background: var(--accent); color: #fff; font-weight: 700; }
+
+/* Chore row */
+.chore-row {
+    display: flex; align-items: center; padding: 14px 16px;
+    border-bottom: 1px solid var(--border); gap: 12px;
+    cursor: pointer; transition: background .12s;
+    position: relative; overflow: visible;
+}
+.chore-row:last-child { border-bottom: none; }
+.chore-row:active { background: var(--bg3); }
+
+/* Celebration burst */
+.celebrate-burst {
+    position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+    font-size: 25px; pointer-events: none; animation: burstPop .5s ease forwards;
+    display: none;
+}
+@keyframes burstPop {
+    0%   { opacity: 1; transform: translateY(-50%) scale(0.5); }
+    60%  { opacity: 1; transform: translateY(-100%) scale(1.4); }
+    100% { opacity: 0; transform: translateY(-160%) scale(1);   }
+}
+
+/* All-done banner */
+.all-done-banner {
+    text-align: center; padding: 24px; color: var(--green);
+    font-size: 19px; font-weight: 600;
+    animation: fadeIn .5s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<a href="/" class="back-link">‹ Household</a>
+
+<div class="member-header">
+    <div class="member-avatar-lg" style="background:{{ member.color }}22;">
+        {{ member.avatar }}
+    </div>
+    <div class="member-name">{{ member.name }}'s Chores</div>
+    <div class="member-pts">🏆 {{ points }} Points</div>
+    {% if streak > 0 %}
+    <div class="member-streak-row">
+        <span class="streak-badge">🔥 {{ streak }} day streak!</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Week strip -->
+<div class="week-strip">
+    {% set day_labels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] %}
+    {% for d in week_dates %}
+    <div class="week-day">
+        <div class="week-day-label">{{ day_labels[loop.index0] }}</div>
+        <div class="week-day-num {% if d == today %}today{% endif %}">{{ d.day }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+{% set total_due = today_chores | length %}
+{% set total_done = today_chores | selectattr('completed') | list | length %}
+
+<!-- Today's chores -->
+{% if today_chores %}
+<div class="section-label">📅 Today · {{ total_done }}/{{ total_due }} done</div>
+<div class="card" id="todaySection">
+    {% for item in today_chores %}
+    <div class="chore-row"
+         onclick="toggleCompletion({{ item.chore.id }}, {{ member.id }}, '{{ today.isoformat() }}', this)"
+         data-done="{{ 'true' if item.completed else 'false' }}">
+        <div class="chore-icon">{{ item.chore.icon }}</div>
+        <div style="flex:1;">
+            <div class="list-row-title {% if item.completed %}strikethrough{% endif %}">
+                {{ item.chore.name }}
+            </div>
+        </div>
+        {% if item.chore.points > 0 %}
+        <span class="pts-badge">{{ item.chore.points }}⭐</span>
+        {% endif %}
+        <div class="completion-box {% if item.completed %}done{% endif %}"></div>
+        <span class="celebrate-burst">🌟</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if total_due > 0 and total_done == total_due %}
+<div class="all-done-banner" id="allDoneBanner">
+    🎉 Amazing! All chores done for today! 🎊
+</div>
+{% endif %}
+
+<!-- As Needed -->
+{% if as_needed_chores %}
+<div class="section-label">🆘 As Needed</div>
+<div class="card">
+    {% for item in as_needed_chores %}
+    <div class="chore-row"
+         onclick="toggleCompletion({{ item.chore.id }}, {{ member.id }}, '{{ today.isoformat() }}', this)"
+         data-done="{{ 'true' if item.completed else 'false' }}">
+        <div class="chore-icon">{{ item.chore.icon }}</div>
+        <div style="flex:1;">
+            <div class="list-row-title {% if item.completed %}strikethrough{% endif %}">
+                {{ item.chore.name }}
+            </div>
+        </div>
+        {% if item.chore.points > 0 %}
+        <span class="pts-badge">{{ item.chore.points }}⭐</span>
+        {% endif %}
+        <div class="completion-box {% if item.completed %}done{% endif %}"></div>
+        <span class="celebrate-burst">✨</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Upcoming -->
+{% if upcoming_chores %}
+<div class="section-label">⏳ Upcoming</div>
+<div class="card">
+    {% for item in upcoming_chores %}
+    <div class="list-row">
+        <div class="chore-icon">{{ item.chore.icon }}</div>
+        <div class="list-row-info">
+            <div class="list-row-title">{{ item.chore.name }}</div>
+            <div class="list-row-sub">📆 {{ item.next_date }}</div>
+        </div>
+        {% if item.chore.points > 0 %}
+        <span class="pts-badge">{{ item.chore.points }}⭐</span>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if not today_chores and not as_needed_chores and not upcoming_chores %}
+<div class="empty-state">
+    <div class="empty-state-icon">🎈</div>
+    <div class="empty-state-text">No chores assigned yet.<br>Add some in the Chores tab!</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TODAY     = '{{ today.isoformat() }}';
+let doneCount   = {{ today_chores | selectattr('completed') | list | length }};
+let totalDue    = {{ today_chores | length }};
+
+const BURSTS = ['🌟','⭐','✨','🎉','💫','🏆','🎊','❤️','🥳','💪'];
+
+function toggleCompletion(choreId, memberId, dateStr, row) {
+    fetch('/api/toggle-completion', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({chore_id: choreId, member_id: memberId, date: dateStr}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        const box   = row.querySelector('.completion-box');
+        const title = row.querySelector('.list-row-title');
+        const burst = row.querySelector('.celebrate-burst');
+
+        box.classList.toggle('done', data.completed);
+        title.classList.toggle('strikethrough', data.completed);
+        row.dataset.done = data.completed ? 'true' : 'false';
+
+        if (data.completed) {
+            doneCount++;
+            burst.textContent = BURSTS[Math.floor(Math.random() * BURSTS.length)];
+            burst.style.display = 'inline';
+            burst.style.animation = 'none';
+            burst.offsetHeight;
+            burst.style.animation = '';
+            setTimeout(() => { burst.style.display = 'none'; }, 550);
+
+            if (doneCount >= totalDue && totalDue > 0) {
+                let banner = document.getElementById('allDoneBanner');
+                if (!banner) {
+                    banner = document.createElement('div');
+                    banner.id = 'allDoneBanner';
+                    banner.className = 'all-done-banner';
+                    banner.textContent = '🎉 Amazing! All chores done for today! 🎊';
+                    document.getElementById('todaySection').after(banner);
+                }
+            }
+        } else {
+            doneCount = Math.max(0, doneCount - 1);
+            const banner = document.getElementById('allDoneBanner');
+            if (banner) banner.remove();
+        }
+
+        const label = document.querySelector('.section-label');
+        if (label && label.textContent.includes('Today')) {
+            label.textContent = `📅 Today · ${doneCount}/${totalDue} done`;
+        }
+    });
+}
+</script>
+{% endblock %}

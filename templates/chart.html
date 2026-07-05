@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+{% set active_tab = "chart" %}
+{% block title %}Chart{% endblock %}
+
+{% block head %}
+<style>
+.chart-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px 4px;
+}
+.chart-nav-label { font-size: 20px; font-weight: 700; }
+.chart-nav-btn {
+    color: var(--accent); font-size: 27px; padding: 4px 10px;
+    text-decoration: none; font-weight: 300; background: none; border: none; cursor: pointer;
+}
+
+/* View selector: Profiles | Chores | Review */
+.view-toggle  { display: flex; justify-content: center; padding: 0 20px 12px; gap: 8px; }
+.group-toggle { display: flex; justify-content: flex-end; padding: 0 20px 2px; gap: 8px; align-items: center; }
+.group-label  { font-size: 16px; color: var(--text3); }
+
+/* Grid */
+.chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.chart-table  { width: 100%; border-collapse: collapse; min-width: 480px; }
+
+.chart-day-header {
+    text-align: center; font-size: 15px; font-weight: 600; color: var(--text3);
+    padding: 6px 2px; width: 40px;
+}
+.chart-day-header.today { color: var(--accent); }
+.chart-day-num {
+    display: block; font-size: 17px; font-weight: 700;
+    width: 30px; height: 30px; line-height: 30px; border-radius: 50%;
+    margin: 0 auto 2px; text-align: center;
+}
+.chart-day-header.today .chart-day-num { background: var(--accent); color: #fff; }
+
+.section-header-row td {
+    background: var(--bg); padding: 12px 16px 4px;
+    font-size: 18px; font-weight: 700; color: var(--text);
+}
+.section-header-inner { display: flex; align-items: center; gap: 8px; }
+
+.chore-name-cell {
+    padding: 8px 8px 8px 16px; font-size: 16px; color: var(--text2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 140px; vertical-align: middle;
+}
+.chore-name-with-icon { display: flex; align-items: center; gap: 6px; }
+
+.member-name-cell {
+    padding: 8px 8px 8px 28px; font-size: 16px; color: var(--text3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 130px; vertical-align: middle;
+}
+.member-name-inner { display: flex; align-items: center; gap: 6px; }
+
+.cell {
+    text-align: center; vertical-align: middle; padding: 6px 2px;
+    width: 40px; cursor: pointer;
+}
+.cell:active { opacity: .7; }
+.cell-inner {
+    width: 30px; height: 30px; border-radius: 8px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 19px; transition: all .2s;
+}
+.cell-inner.completed { background: var(--green)22; color: var(--green); font-weight: 700; }
+.cell-inner.incomplete { background: var(--red)22; color: var(--red); font-weight: 700; }
+.cell-inner.due_today { color: var(--text3); font-weight: 700; }
+.cell-inner.upcoming  { color: var(--border); }
+
+.legend {
+    display: flex; gap: 16px; flex-wrap: wrap; padding: 12px 16px;
+    background: var(--bg2); border-radius: 12px; margin: 0 16px 16px;
+}
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 16px; color: var(--text3); }
+
+/* ── Weekly Review cards ── */
+#reviewContent { display: none; }
+.review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 16px 16px; }
+.review-card {
+    background: var(--bg2); border-radius: 16px; padding: 16px;
+    box-shadow: 0 1px 4px var(--shadow);
+}
+.review-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.review-card-avatar { font-size: 30px; }
+.review-card-name   { font-size: 18px; font-weight: 700; }
+.review-stat        { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.review-stat-label  { font-size: 15px; color: var(--text3); }
+.review-stat-value  { font-size: 16px; font-weight: 700; }
+.review-pct-bar     { height: 6px; border-radius: 3px; background: var(--bg3); margin-top: 8px; }
+.review-pct-fill    { height: 100%; border-radius: 3px; background: var(--green); transition: width .5s; }
+.review-best        { font-size: 14px; color: var(--text3); margin-top: 8px; }
+.review-loading     { text-align: center; padding: 40px; color: var(--text3); font-size: 18px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Nav: week -->
+<div class="chart-nav">
+    <button class="chart-nav-btn" onclick="changeWeek(-1)">‹</button>
+    <span class="chart-nav-label" id="weekLabel">{{ week_label }}</span>
+    <button class="chart-nav-btn" onclick="changeWeek(+1)">›</button>
+</div>
+
+<!-- View mode: Chart / Review -->
+<div class="view-toggle">
+    <div class="seg-ctrl" style="width:220px;">
+        <button class="seg-btn active" data-view="chart"   onclick="switchView('chart')">📊 Chart</button>
+        <button class="seg-btn"        data-view="review"  onclick="switchView('review')">📝 Review</button>
+    </div>
+</div>
+
+<!-- Group by toggle (only visible in chart mode) -->
+<div class="group-toggle" id="groupToggleRow">
+    <span class="group-label">Grouped By</span>
+    <div class="seg-ctrl" style="width:180px;">
+        <button class="seg-btn {% if group_by=='profiles' %}active{% endif %}"
+                data-group="profiles" onclick="switchGroup('profiles')">Profiles</button>
+        <button class="seg-btn {% if group_by=='chores' %}active{% endif %}"
+                data-group="chores"   onclick="switchGroup('chores')">Chores</button>
+    </div>
+</div>
+
+<!-- Chart view -->
+<div id="chartContent">
+<div class="chart-scroll" style="margin:0 16px;">
+<table class="chart-table" id="chartTable">
+    <thead>
+        <tr>
+            <th style="width:140px;"></th>
+            {% for i in range(7) %}
+            {% set d = week_dates[i] %}
+            {% set is_today = (d == today) %}
+            <th class="chart-day-header {% if is_today %}today{% endif %}">
+                <span class="chart-day-num">{{ d.day }}</span>
+                {{ day_names[i] }}
+            </th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody id="chartBody">
+    {% if group_by == 'profiles' %}
+        {% for section in chart_data %}
+        <tr class="section-header-row">
+            <td colspan="8">
+                <div class="section-header-inner">
+                    <div class="avatar-sm" style="background:{{ section.member.color }}33;">{{ section.member.avatar }}</div>
+                    <strong>{{ section.member.name }}</strong>
+                </div>
+            </td>
+        </tr>
+        {% for item in section.chores %}
+        <tr data-chore-id="{{ item.chore.id }}" data-member-id="{{ section.member.id }}">
+            <td class="chore-name-cell">
+                <div class="chore-name-with-icon">
+                    <span>{{ item.chore.icon }}</span><span>{{ item.chore.name }}</span>
+                </div>
+            </td>
+            {% for status in item.cells %}
+            {% set d = week_dates[loop.index0] %}
+            <td class="cell" onclick="toggleCell({{ item.chore.id }}, {{ section.member.id }}, '{{ d.isoformat() }}', this)"
+                data-status="{{ status }}">
+                <div class="cell-inner {{ status }}">
+                    {% if status == 'completed' %}✓{% elif status == 'incomplete' %}✗{% elif status == 'due_today' %}✓{% elif status == 'upcoming' %}·{% endif %}
+                </div>
+            </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+        {% if not loop.last %}<tr style="height:12px;"><td colspan="8"></td></tr>{% endif %}
+        {% endfor %}
+
+    {% else %}
+        {% for section in chart_data %}
+        <tr class="section-header-row">
+            <td colspan="8">
+                <div class="section-header-inner">
+                    <div style="width:28px;height:28px;border-radius:6px;background:var(--bg3);font-size:16px;display:flex;align-items:center;justify-content:center;">{{ section.chore.icon }}</div>
+                    <strong>{{ section.chore.name }}</strong>
+                    {% if section.chore.points > 0 %}<span style="font-size:15px;color:var(--text3);font-weight:400;">· {{ section.chore.points }}pts</span>{% endif %}
+                </div>
+            </td>
+        </tr>
+        {% for item in section.members %}
+        <tr>
+            <td class="member-name-cell">
+                <div class="member-name-inner">
+                    <div class="avatar-sm" style="background:{{ item.member.color }}33;">{{ item.member.avatar }}</div>
+                    <span>{{ item.member.name }}</span>
+                </div>
+            </td>
+            {% for status in item.cells %}
+            {% set d = week_dates[loop.index0] %}
+            <td class="cell" onclick="toggleCell({{ section.chore.id }}, {{ item.member.id }}, '{{ d.isoformat() }}', this)"
+                data-status="{{ status }}">
+                <div class="cell-inner {{ status }}">
+                    {% if status == 'completed' %}✓{% elif status == 'incomplete' %}✗{% elif status == 'due_today' %}✓{% elif status == 'upcoming' %}·{% endif %}
+                </div>
+            </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+        {% if not loop.last %}<tr style="height:12px;"><td colspan="8"></td></tr>{% endif %}
+        {% endfor %}
+    {% endif %}
+    </tbody>
+</table>
+</div>
+
+<div class="legend">
+    <div class="legend-item"><span style="color:var(--green);font-weight:700;">✓</span> Completed</div>
+    <div class="legend-item"><span style="color:var(--red);font-weight:700;">✗</span> Incomplete</div>
+    <div class="legend-item"><span style="color:var(--text3);font-weight:700;">✓</span> Due today</div>
+    <div class="legend-item"><span style="color:var(--border);">·</span> Upcoming</div>
+</div>
+
+{% if not chart_data %}
+<div class="empty-state">
+    <div class="empty-state-icon">📊</div>
+    <div class="empty-state-text">Add members and chores to see the chart</div>
+</div>
+{% endif %}
+</div>{# end #chartContent #}
+
+<!-- Review view -->
+<div id="reviewContent">
+    <div class="review-loading" id="reviewLoading">Loading review…</div>
+    <div class="review-grid" id="reviewGrid"></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TODAY_STR  = '{{ today.isoformat() }}';
+let currentWeek  = {{ week_offset }};
+let currentGroup = '{{ group_by }}';
+let currentView  = 'chart';
+
+/* ── Week navigation ── */
+function changeWeek(delta) {
+    currentWeek += delta;
+    const url = `/chart?week=${currentWeek}&group=${currentGroup}`;
+    fetch(url)
+        .then(r => r.text())
+        .then(swapPage);
+}
+
+/* ── Group toggle (no page reload) ── */
+function switchGroup(newGroup) {
+    if (newGroup === currentGroup) return;
+    const label = newGroup === 'profiles' ? 'Profiles' : 'Chores';
+    if (!confirm(`Switch chart view to ${label}?`)) return;
+    currentGroup = newGroup;
+
+    // Update button states immediately
+    document.querySelectorAll('.seg-btn[data-group]').forEach(btn =>
+        btn.classList.toggle('active', btn.dataset.group === newGroup));
+
+    const url = `/chart?week=${currentWeek}&group=${newGroup}`;
+    fetch(url)
+        .then(r => r.text())
+        .then(html => {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const newTable = doc.getElementById('chartBody');
+            document.getElementById('chartBody').replaceWith(newTable);
+            // Update URL without reload
+            history.replaceState({}, '', url);
+        });
+}
+
+/* Full page swap (for week change) */
+function swapPage(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    // Swap chart body
+    const newBody = doc.getElementById('chartBody');
+    if (newBody) document.getElementById('chartBody').replaceWith(newBody);
+    // Swap week label
+    const newLabel = doc.querySelector('.chart-nav-label, #weekLabel');
+    if (newLabel) document.getElementById('weekLabel').textContent = newLabel.textContent;
+    // Update URL
+    history.replaceState({}, '', `/chart?week=${currentWeek}&group=${currentGroup}`);
+    // If review is shown, reload it
+    if (currentView === 'review') loadReview();
+}
+
+/* ── View toggle: Chart vs Review ── */
+function switchView(view) {
+    if (view === currentView) return;
+    const label = view === 'chart' ? 'Chart' : 'Review';
+    if (!confirm(`Switch to ${label} mode?`)) return;
+    currentView = view;
+    document.querySelectorAll('.seg-btn[data-view]').forEach(btn =>
+        btn.classList.toggle('active', btn.dataset.view === view));
+
+    const showChart = view === 'chart';
+    document.getElementById('chartContent').style.display   = showChart ? 'block' : 'none';
+    document.getElementById('groupToggleRow').style.display = showChart ? 'flex' : 'none';
+    document.getElementById('reviewContent').style.display  = showChart ? 'none' : 'block';
+
+    if (view === 'review') loadReview();
+}
+
+/* ── Weekly Review ── */
+let reviewLoaded = false;
+function loadReview() {
+    document.getElementById('reviewLoading').style.display = '';
+    document.getElementById('reviewGrid').innerHTML = '';
+
+    fetch(`/api/weekly-review?week=${currentWeek}`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('reviewLoading').style.display = 'none';
+            const grid = document.getElementById('reviewGrid');
+            grid.innerHTML = data.members.map(m => {
+                const pct = m.pct;
+                const streakBadge = m.streak > 0
+                    ? `<span class="streak-badge">🔥 ${m.streak}d</span>`
+                    : '';
+                const best = m.best_chore
+                    ? `<div class="review-best">⭐ Best: ${m.best_chore.icon} ${m.best_chore.name}</div>`
+                    : '';
+                return `
+                <div class="review-card">
+                    <div class="review-card-header">
+                        <span class="review-card-avatar">${m.avatar}</span>
+                        <div>
+                            <div class="review-card-name">${m.name}</div>
+                            ${streakBadge}
+                        </div>
+                    </div>
+                    <div class="review-stat">
+                        <span class="review-stat-label">Completed</span>
+                        <span class="review-stat-value">${m.comp_count}/${m.total_due}</span>
+                    </div>
+                    <div class="review-stat">
+                        <span class="review-stat-label">Points earned</span>
+                        <span class="review-stat-value" style="color:var(--accent);">+${m.pts_week}</span>
+                    </div>
+                    <div class="review-pct-bar">
+                        <div class="review-pct-fill" style="width:${pct}%;"></div>
+                    </div>
+                    ${best}
+                </div>`;
+            }).join('');
+        });
+}
+
+/* ── Cell toggle ── */
+function toggleCell(choreId, memberId, dateStr, td) {
+    if (dateStr > TODAY_STR) return;
+    if (td.dataset.status === 'not_due') return;
+
+    fetch('/api/toggle-completion', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({chore_id: choreId, member_id: memberId, date: dateStr})
+    })
+    .then(r => r.json())
+    .then(data => {
+        const cellInner = td.querySelector('.cell-inner');
+        const wasCompleted = data.completed;
+        let newStatus = wasCompleted ? 'completed'
+            : dateStr < TODAY_STR ? 'incomplete' : 'due_today';
+        cellInner.className = `cell-inner ${newStatus}`;
+        cellInner.textContent = wasCompleted ? '✓' : (newStatus === 'incomplete' ? '✗' : '✓');
+        td.dataset.status = newStatus;
+    });
+}
+</script>
+{% endblock %}

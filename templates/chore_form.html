@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+{% set active_tab = "chores" %}
+{% block title %}{{ 'Edit Chore' if chore else 'New Chore' }}{% endblock %}
+
+{% block head %}
+<style>
+.form-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px 4px; position: sticky; top: 0;
+    background: var(--bg); z-index: 10;
+    border-bottom: 1px solid var(--border);
+}
+.form-topbar a, .form-topbar button {
+    color: var(--accent); background: none; border: none;
+    font-size: 17px; cursor: pointer; padding: 4px 0; min-width: 60px;
+}
+.save-status {
+    font-size: 12px; font-weight: 600; text-align: center; margin-top: 2px;
+    min-height: 16px; transition: color .2s;
+}
+.save-status.saving { color: var(--text3); }
+.save-status.saved  { color: var(--green); }
+.save-status.error  { color: var(--red); }
+.save-status.hint   { color: var(--text3); }
+
+.icon-preview {
+    font-size: 52px; text-align: center; padding: 16px;
+    background: var(--bg3); border-radius: 16px; margin-bottom: 12px;
+    line-height: 1;
+}
+
+/* Icon picker — grouped by category */
+.icon-categories { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.icon-cat-btn {
+    padding: 5px 12px; border-radius: 14px; border: none;
+    background: var(--bg3); color: var(--text3); font-size: 13px;
+    cursor: pointer; transition: all .2s; font-weight: 500;
+}
+.icon-cat-btn.active { background: var(--accent); color: #fff; }
+.icon-grid {
+    display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px;
+    max-height: 180px; overflow-y: auto; background: var(--bg3);
+    border-radius: 10px; padding: 8px;
+}
+.icon-opt {
+    font-size: 26px; text-align: center; padding: 6px 2px;
+    border-radius: 8px; cursor: pointer; line-height: 1;
+    transition: background .15s;
+}
+.icon-opt.selected { background: var(--accent)44; outline: 2px solid var(--accent); }
+.icon-opt:active { background: var(--bg4); }
+
+/* Assign / schedule pill buttons */
+.pill-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill {
+    padding: 8px 16px; border-radius: 20px; border: 1.5px solid var(--border);
+    background: none; color: var(--text3); font-size: 15px;
+    cursor: pointer; transition: all .2s; font-weight: 500;
+}
+.pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Day picker */
+.day-row { display: flex; gap: 6px; }
+.day-btn {
+    flex: 1; padding: 10px 0; border: none; border-radius: 8px;
+    background: var(--bg3); color: var(--text3); font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: all .2s;
+}
+.day-btn.active { background: var(--accent); color: #fff; }
+
+/* Member toggle */
+.member-list { display: flex; flex-direction: column; gap: 8px; }
+.member-toggle {
+    display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+    background: var(--bg3); border-radius: 10px; cursor: pointer;
+    border: 1.5px solid transparent; transition: all .2s;
+}
+.member-toggle.selected { border-color: var(--accent); background: var(--accent)11; }
+.toggle-check {
+    width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center; margin-left: auto;
+    font-size: 12px; flex-shrink: 0; transition: all .2s;
+}
+.member-toggle.selected .toggle-check { background: var(--accent); border-color: var(--accent); color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Sticky top bar -->
+<div class="form-topbar">
+    <a href="/chores">← Chores</a>
+    <div style="text-align:center;">
+        <div style="font-size:17px;font-weight:700;">{{ 'Edit Chore' if chore else 'New Chore' }}</div>
+        <div class="save-status hint" id="saveStatus">
+            {% if not chore %}Type a name to begin auto‑saving{% else %}Auto‑saved{% endif %}
+        </div>
+    </div>
+    <span style="min-width:60px;"></span>
+</div>
+
+<div style="padding: 16px 16px 0;">
+
+    <!-- Icon preview + picker -->
+    <div class="form-group">
+        <div class="icon-preview" id="iconPreview">{{ chore.icon if chore else '📋' }}</div>
+
+        <label class="form-label">Choose Icon</label>
+        <div class="icon-categories" id="iconCats">
+            {% set cats = [
+                ('🏠','Home',['🛏️','🧹','🍽️','🧺','🪣','🚿','🧽','🪥','🗑️','🧻','👕','🌿','🔧','🪴','🧴','🪞','🛁','🪑','🏡','🧸']),
+                ('📚','Study',['📚','📖','✏️','🖍️','🧪','📝','🎯','🔬','💻','🧮','📐','📏','🔭','📓','🏫','🖊️','📌','📎']),
+                ('🏃','Active',['🏃','🚴','🏊','🤸','🏋️','⚽','🏀','🎾','🧘','🤾','🏸','🎱','⛹️','🥊','🛹','🛼','🧗','🤽']),
+                ('🎵','Music',['🎹','🎸','🎻','🥁','🎺','🎵','🎶','🎼','🪕','🎷','🪗','🎙️']),
+                ('🎨','Art',['🎨','🖌️','✂️','📸','🎭','🖼️','🧶','🪡','💎','🪆','✍️','🎪']),
+                ('🐾','Pets',['🐕','🐱','🐠','🐇','🐢','🦎','🐹','🐓','🦜','🐝','🪸','🦴']),
+                ('🍎','Food',['🍳','🥘','🥗','🍎','🥦','🍰','🧁','🍌','🥚','🥐','☕','🧃','🍱','🥡','🫙']),
+                ('⭐','Other',['⭐','🌟','🏆','🎯','🎀','🎁','🎪','💡','🔑','📦','🎲','🃏','🧩','💌','🌈','☀️','🌙','💤','⏰','🔔','💪','🤝','🫶','❤️','🔥']),
+            ] %}
+            {% for emoji, label, icons in cats %}
+            <button class="icon-cat-btn {% if loop.first %}active{% endif %}"
+                    onclick="showCat('{{ label }}', this)" data-cat="{{ label }}">
+                {{ emoji }} {{ label }}
+            </button>
+            {% endfor %}
+        </div>
+
+        <div class="icon-grid" id="iconGrid">
+            <!-- Populated by JS on load and category switch -->
+        </div>
+    </div>
+
+    <!-- Name -->
+    <div class="form-group">
+        <label class="form-label">Chore Name</label>
+        <input type="text" class="form-input" id="choreName"
+               placeholder="e.g. Make Bed 🛏️"
+               value="{{ chore.name if chore else '' }}"
+               oninput="triggerAutoSave()">
+    </div>
+
+    <!-- Points -->
+    <div class="form-group">
+        <label class="form-label">🌟 Points Reward</label>
+        <input type="number" class="form-input" id="chorePoints"
+               placeholder="0" min="0" max="999"
+               value="{{ chore.points if chore else '0' }}"
+               oninput="triggerAutoSave()">
+    </div>
+
+    <!-- Assignment type -->
+    <div class="form-group">
+        <label class="form-label">👥 Assign To</label>
+        <div class="pill-row" id="assignType">
+            {% for val, label in [('everyone','👨‍👩‍👧 Everyone'),('anyone','🙋 Anyone'),('rotate','🔄 Rotate'),('specific','🎯 Specific')] %}
+            <button class="pill {% if (chore and chore.assignment_type==val) or (not chore and val=='everyone') %}active{% endif %}"
+                    onclick="setAssignType('{{ val }}', this)">{{ label }}</button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Member selector -->
+    <div class="form-group" id="memberSection"
+         style="{% if not chore or chore.assignment_type in ('everyone','anyone') %}display:none{% endif %}">
+        <label class="form-label">👤 Members</label>
+        <div class="member-list">
+            {% for m in all_members %}
+            <div class="member-toggle {% if m.id in assigned_ids %}selected{% endif %}"
+                 onclick="toggleMember({{ m.id }}, this)" data-mid="{{ m.id }}">
+                <div class="avatar-sm" style="background:{{ m.color }}33;">{{ m.avatar }}</div>
+                <span style="font-size:16px;font-weight:500;">{{ m.name }}</span>
+                <div class="toggle-check">{% if m.id in assigned_ids %}✓{% endif %}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Schedule type -->
+    <div class="form-group">
+        <label class="form-label">📅 Schedule</label>
+        <div class="pill-row" id="scheduleType">
+            {% for val, label in [('daily','☀️ Daily'),('weekdays','🗓️ Weekdays'),('weekends','🏖️ Weekends'),('specific','📌 Specific Days'),('as_needed','🆘 As Needed')] %}
+            <button class="pill {% if (chore and chore.schedule_type==val) or (not chore and val=='daily') %}active{% endif %}"
+                    onclick="setScheduleType('{{ val }}', this)">{{ label }}</button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Day picker -->
+    <div class="form-group" id="daySection"
+         style="{% if not chore or chore.schedule_type != 'specific' %}display:none{% endif %}">
+        <label class="form-label">Days of Week</label>
+        <div class="day-row">
+            {% for name, idx in [('Sun',0),('Mon',1),('Tue',2),('Wed',3),('Thu',4),('Fri',5),('Sat',6)] %}
+            <button class="day-btn {% if idx in schedule_days_list %}active{% endif %}"
+                    onclick="toggleDay({{ idx }}, this)" data-day="{{ idx }}">{{ name }}</button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Delete (edit mode) -->
+    {% if chore %}
+    <div class="form-group" style="margin-top:8px;">
+        <button onclick="deleteChore()" class="btn btn-danger">
+            🗑️ Delete Chore
+        </button>
+    </div>
+    {% endif %}
+
+    <div style="height:20px;"></div>
+</div>
+
+<!-- Hidden state -->
+<input type="hidden" id="choreId"           value="{{ chore.id if chore else '' }}">
+<input type="hidden" id="selectedIcon"      value="{{ chore.icon if chore else '📋' }}">
+<input type="hidden" id="selectedAssign"    value="{{ chore.assignment_type if chore else 'everyone' }}">
+<input type="hidden" id="selectedSchedule"  value="{{ chore.schedule_type if chore else 'daily' }}">
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── Icon data, grouped by category ── */
+const ICON_CATS = {
+    'Home':   ['🛏️','🧹','🍽️','🧺','🪣','🚿','🧽','🪥','🗑️','🧻','👕','🌿','🔧','🪴','🧴','🪞','🛁','🪑','🏡','🧸'],
+    'Study':  ['📚','📖','✏️','🖍️','🧪','📝','🎯','🔬','💻','🧮','📐','📏','🔭','📓','🏫','🖊️','📌','📎'],
+    'Active': ['🏃','🚴','🏊','🤸','🏋️','⚽','🏀','🎾','🧘','🤾','🏸','🎱','⛹️','🥊','🛹','🛼','🧗','🤽'],
+    'Music':  ['🎹','🎸','🎻','🥁','🎺','🎵','🎶','🎼','🪕','🎷','🪗','🎙️'],
+    'Art':    ['🎨','🖌️','✂️','📸','🎭','🖼️','🧶','🪡','💎','🪆','✍️','🎪'],
+    'Pets':   ['🐕','🐱','🐠','🐇','🐢','🦎','🐹','🐓','🦜','🐝','🪸','🦴'],
+    'Food':   ['🍳','🥘','🥗','🍎','🥦','🍰','🧁','🍌','🥚','🥐','☕','🧃','🍱','🥡','🫙'],
+    'Other':  ['⭐','🌟','🏆','🎯','🎀','🎁','🎪','💡','🔑','📦','🎲','🃏','🧩','💌','🌈','☀️','🌙','💤','⏰','🔔','💪','🤝','🫶','❤️','🔥'],
+};
+
+let currentChoreId    = {{ chore.id if chore else 'null' }};
+let selectedMemberIds = new Set({{ assigned_ids | tojson }});
+let selectedDays      = new Set({{ schedule_days_list | tojson }});
+let saveTimer         = null;
+let saveInFlight      = false;
+let currentCat        = 'Home';
+
+/* ── Icon picker ── */
+function showCat(cat, btn) {
+    currentCat = cat;
+    document.querySelectorAll('.icon-cat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderIconGrid();
+}
+function renderIconGrid() {
+    const icons   = ICON_CATS[currentCat] || [];
+    const current = document.getElementById('selectedIcon').value;
+    document.getElementById('iconGrid').innerHTML = icons.map(icon =>
+        `<div class="icon-opt ${icon === current ? 'selected' : ''}"
+              onclick="selectIcon('${icon}', this)">${icon}</div>`
+    ).join('');
+}
+function selectIcon(icon, el) {
+    document.querySelectorAll('.icon-opt').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('selectedIcon').value = icon;
+    document.getElementById('iconPreview').textContent = icon;
+    triggerAutoSave();
+}
+
+/* ── Assignment & schedule ── */
+function setAssignType(val, el) {
+    document.querySelectorAll('#assignType .pill').forEach(e => e.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('selectedAssign').value = val;
+    document.getElementById('memberSection').style.display =
+        (val === 'specific' || val === 'rotate') ? 'block' : 'none';
+    triggerAutoSave();
+}
+function setScheduleType(val, el) {
+    document.querySelectorAll('#scheduleType .pill').forEach(e => e.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('selectedSchedule').value = val;
+    document.getElementById('daySection').style.display = val === 'specific' ? 'block' : 'none';
+    triggerAutoSave();
+}
+function toggleMember(mid, el) {
+    if (selectedMemberIds.has(mid)) {
+        selectedMemberIds.delete(mid);
+        el.classList.remove('selected');
+        el.querySelector('.toggle-check').textContent = '';
+    } else {
+        selectedMemberIds.add(mid);
+        el.classList.add('selected');
+        el.querySelector('.toggle-check').textContent = '✓';
+    }
+    triggerAutoSave();
+}
+function toggleDay(day, el) {
+    selectedDays.has(day) ? selectedDays.delete(day) : selectedDays.add(day);
+    el.classList.toggle('active', selectedDays.has(day));
+    triggerAutoSave();
+}
+
+/* ── Auto‑save ── */
+function setSaveStatus(state, msg) {
+    const el = document.getElementById('saveStatus');
+    el.className = 'save-status ' + state;
+    el.textContent = msg;
+}
+
+function triggerAutoSave() {
+    const name = document.getElementById('choreName').value.trim();
+    if (!name) {
+        setSaveStatus('hint', 'Type a name to begin auto‑saving');
+        return;
+    }
+    setSaveStatus('saving', '✏️ Saving…');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(doSave, 700);
+}
+
+function doSave() {
+    if (saveInFlight) { saveTimer = setTimeout(doSave, 500); return; }
+    const name = document.getElementById('choreName').value.trim();
+    if (!name) return;
+
+    saveInFlight = true;
+    const payload = {
+        id:              currentChoreId,
+        name,
+        icon:            document.getElementById('selectedIcon').value,
+        points:          parseInt(document.getElementById('chorePoints').value) || 0,
+        assignment_type: document.getElementById('selectedAssign').value,
+        schedule_type:   document.getElementById('selectedSchedule').value,
+        schedule_days:   Array.from(selectedDays),
+        member_ids:      Array.from(selectedMemberIds),
+    };
+
+    fetch('/api/save-chore', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify(payload),
+    })
+    .then(r => r.json())
+    .then(data => {
+        saveInFlight = false;
+        if (data.success) {
+            const wasVersioned = data.versioned && data.chore_id !== currentChoreId;
+            currentChoreId = data.chore_id;
+            document.getElementById('choreId').value = data.chore_id;
+            if (wasVersioned) {
+                // URL still shows old chore_id — update so a refresh edits the new version
+                history.replaceState({}, '', `/chores/${data.chore_id}/edit`);
+                setSaveStatus('saved', '✅ Saved (new version — history preserved)');
+            } else {
+                setSaveStatus('saved', '✅ Saved');
+            }
+            setTimeout(() => setSaveStatus('hint', 'Auto‑save on'), 2500);
+        } else {
+            setSaveStatus('error', '❌ Error — retry');
+        }
+    })
+    .catch(() => {
+        saveInFlight = false;
+        setSaveStatus('error', '❌ Connection error');
+    });
+}
+
+function deleteChore() {
+    if (!confirm('Delete this chore? Completion history will be kept.')) return;
+    fetch('/api/delete-chore', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({chore_id: parseInt(document.getElementById('choreId').value)}),
+    }).then(() => window.location.href = '/chores');
+}
+
+/* ── Init ── */
+renderIconGrid();
+// If editing, scroll icon picker to show current icon's category
+{% if chore %}
+(function() {
+    const cur = {{ chore.icon | tojson }};
+    for (const [cat, icons] of Object.entries(ICON_CATS)) {
+        if (icons.includes(cur)) {
+            currentCat = cat;
+            document.querySelectorAll('.icon-cat-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.cat === cat);
+            });
+            renderIconGrid();
+            break;
+        }
+    }
+})();
+{% endif %}
+</script>
+{% endblock %}
