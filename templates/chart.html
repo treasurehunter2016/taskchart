@@ -70,6 +70,11 @@
 .cell-inner.due_today { color: var(--text3); font-weight: 700; }
 .cell-inner.upcoming  { color: var(--border); }
 
+/* Green theme: use solid fills so cells stand out on the light green background */
+[data-theme="green"] .cell-inner.completed  { background: var(--green); color: #fff; }
+[data-theme="green"] .cell-inner.incomplete { background: var(--red);   color: #fff; }
+[data-theme="green"] .cell-inner.due_today  { background: var(--bg3); color: var(--accent); border: 1.5px solid var(--accent); }
+
 .legend {
     display: flex; gap: 16px; flex-wrap: wrap; padding: 12px 16px;
     background: var(--bg2); border-radius: 12px; margin: 0 16px 16px;
@@ -274,11 +279,14 @@ function switchGroup(newGroup) {
 /* Full page swap (for week change) */
 function swapPage(html) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
+    // Swap date header row (day numbers + today highlight)
+    const newThead = doc.querySelector('#chartTable thead');
+    if (newThead) document.querySelector('#chartTable thead').replaceWith(newThead);
     // Swap chart body
     const newBody = doc.getElementById('chartBody');
     if (newBody) document.getElementById('chartBody').replaceWith(newBody);
     // Swap week label
-    const newLabel = doc.querySelector('.chart-nav-label, #weekLabel');
+    const newLabel = doc.getElementById('weekLabel');
     if (newLabel) document.getElementById('weekLabel').textContent = newLabel.textContent;
     // Update URL
     history.replaceState({}, '', `/chart?week=${currentWeek}&group=${currentGroup}`);
