@@ -29,7 +29,7 @@
 <div class="card">
     {% for item in chores %}
     <div class="chore-row">
-        <div class="chore-icon" style="background:var(--bg3);">{{ item.chore.icon }}</div>
+        <div class="chore-icon" style="background:{% if item.chore.points < 0 %}var(--red)22{% else %}var(--bg3){% endif %};">{{ item.chore.icon }}</div>
         <div class="chore-meta">
             <div class="chore-name">{{ item.chore.name }}</div>
             <div class="chore-schedule">
@@ -57,6 +57,8 @@
             </div>
             {% if item.chore.points > 0 %}
             <span class="pts-badge">{{ item.chore.points }}pts</span>
+            {% elif item.chore.points < 0 %}
+            <span class="pts-badge" style="color:var(--red);">⚠️ {{ item.chore.points }}pts</span>
             {% endif %}
             <a href="/chores/{{ item.chore.id }}/edit" style="color:var(--accent);font-size:15px;padding:4px;">›</a>
         </div>

@@ -98,6 +98,18 @@
 .review-pct-fill    { height: 100%; border-radius: 3px; background: var(--green); transition: width .5s; }
 .review-best        { font-size: 14px; color: var(--text3); margin-top: 8px; }
 .review-loading     { text-align: center; padding: 40px; color: var(--text3); font-size: 18px; }
+
+/* ── Heatmap ── */
+.heatmap-section  { padding: 0 16px 20px; }
+.heatmap-label    { font-size: 14px; color: var(--text3); margin-bottom: 6px; font-weight: 600; }
+.heatmap-grid     { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; }
+.heatmap-col      { display: flex; flex-direction: column; gap: 3px; }
+.heatmap-cell     { width: 100%; aspect-ratio: 1; border-radius: 2px; background: var(--bg3); }
+.heatmap-cell.l1  { background: var(--green); opacity: .25; }
+.heatmap-cell.l2  { background: var(--green); opacity: .50; }
+.heatmap-cell.l3  { background: var(--green); opacity: .75; }
+.heatmap-cell.l4  { background: var(--green); opacity: 1;   }
+[data-theme="green"] .heatmap-cell     { background: var(--bg4); }
 </style>
 {% endblock %}
 
@@ -233,6 +245,7 @@
 <div id="reviewContent">
     <div class="review-loading" id="reviewLoading">Loading review…</div>
     <div class="review-grid" id="reviewGrid"></div>
+    <div id="reviewHeatmap"></div>
 </div>
 
 {% endblock %}
@@ -240,6 +253,7 @@
 {% block scripts %}
 <script>
 const TODAY_STR  = '{{ today.isoformat() }}';
+const CHORES_MAP = {{ chores_map | tojson }};
 let currentWeek  = {{ week_offset }};
 let currentGroup = '{{ group_by }}';
 let currentView  = 'chart';
@@ -297,8 +311,6 @@ function swapPage(html) {
 /* ── View toggle: Chart vs Review ── */
 function switchView(view) {
     if (view === currentView) return;
-    const label = view === 'chart' ? 'Chart' : 'Review';
-    if (!confirm(`Switch to ${label} mode?`)) return;
     currentView = view;
     document.querySelectorAll('.seg-btn[data-view]').forEach(btn =>
         btn.classList.toggle('active', btn.dataset.view === view));
@@ -314,8 +326,9 @@ function switchView(view) {
 /* ── Weekly Review ── */
 let reviewLoaded = false;
 function loadReview() {
-    document.getElementById('reviewLoading').style.display = '';
+    document.getElementById('reviewLoading').style.display = 'block';
     document.getElementById('reviewGrid').innerHTML = '';
+    document.getElementById('reviewHeatmap').innerHTML = '';
 
     fetch(`/api/weekly-review?week=${currentWeek}`)
         .then(r => r.json())
@@ -324,8 +337,10 @@ function loadReview() {
             const grid = document.getElementById('reviewGrid');
             grid.innerHTML = data.members.map(m => {
                 const pct = m.pct;
-                const streakBadge = m.streak > 0
-                    ? `<span class="streak-badge">🔥 ${m.streak}d</span>`
+                const badgeHtml = (m.badges || []).map(b =>
+                    `<span class="milestone-badge" title="${b.label}">${b.emoji}</span>`).join('');
+                const streakHtml = m.streak > 0
+                    ? `<span class="streak-badge">🔥 ${m.streak}d</span> ${badgeHtml}`
                     : '';
                 const best = m.best_chore
                     ? `<div class="review-best">⭐ Best: ${m.best_chore.icon} ${m.best_chore.name}</div>`
@@ -336,7 +351,7 @@ function loadReview() {
                         <span class="review-card-avatar">${m.avatar}</span>
                         <div>
                             <div class="review-card-name">${m.name}</div>
-                            ${streakBadge}
+                            ${streakHtml}
                         </div>
                     </div>
                     <div class="review-stat">
@@ -353,6 +368,29 @@ function loadReview() {
                     ${best}
                 </div>`;
             }).join('');
+
+            // Per-member heatmaps below the stat cards
+            document.getElementById('reviewHeatmap').innerHTML = data.members.map(m => {
+                const cells = m.heatmap || [];
+                const maxCount = Math.max(1, ...cells.map(c => c.count));
+                let cols = '';
+                for (let col = 0; col < 12; col++) {
+                    let colHtml = '';
+                    for (let row = 0; row < 7; row++) {
+                        const c   = cells[col * 7 + row] || {count: 0, date: ''};
+                        const lvl = c.count === 0 ? 0
+                                  : c.count <= maxCount * .25 ? 1
+                                  : c.count <= maxCount * .5  ? 2
+                                  : c.count <= maxCount * .75 ? 3 : 4;
+                        colHtml += `<div class="heatmap-cell${lvl ? ' l'+lvl : ''}" title="${c.date}: ${c.count} completions"></div>`;
+                    }
+                    cols += `<div class="heatmap-col">${colHtml}</div>`;
+                }
+                return `<div class="heatmap-section">
+                    <div class="heatmap-label">${m.avatar} ${m.name} — 12-week activity</div>
+                    <div class="heatmap-grid">${cols}</div>
+                </div>`;
+            }).join('');
         });
 }
 
@@ -360,6 +398,18 @@ function loadReview() {
 function toggleCell(choreId, memberId, dateStr, td) {
     if (dateStr > TODAY_STR) return;
     if (td.dataset.status === 'not_due') return;
+
+    const chore      = CHORES_MAP[choreId] || {};
+    const choreName  = chore.name || 'this chore';
+    const pts        = chore.points || 0;
+    const isDone     = td.dataset.status === 'completed';
+    const action     = isDone ? 'Unmark' : 'Mark';
+    let ptsTxt = '';
+    if (!isDone) {
+        if (pts < 0)      ptsTxt = `\n⚠️ Penalty: ${pts} pts`;
+        else if (pts > 0) ptsTxt = `\n+${pts} pts`;
+    }
+    if (!confirm(`${action} "${choreName}" on ${dateStr}?${ptsTxt}`)) return;
 
     fetch('/api/toggle-completion', {
         method:  'POST',

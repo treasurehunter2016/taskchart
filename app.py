@@ -154,6 +154,11 @@ def get_assigned_member_ids(chore, all_member_ids, conn):
                         (chore['id'],)).fetchall()
     return [r['member_id'] for r in rows]
 
+STREAK_MILESTONES = [(100, '💎', '100d'), (30, '🥇', '30d'), (7, '🥈', '7d'), (3, '🥉', '3d')]
+
+def calc_badges(streak):
+    return [{'emoji': e, 'label': l} for days, e, l in STREAK_MILESTONES if streak >= days]
+
 def calc_points(member_id, conn):
     # Join completions to chores without filtering active=1 so historical points
     # always reflect the original chore definition, even after versioning.
@@ -207,6 +212,7 @@ def household():
                 (c['id'], m['id'], today_str)).fetchone()
         )
         m['streak'] = calc_streak(m['id'], conn)
+        m['badges'] = calc_badges(m['streak'])
     conn.close()
     return render_template('household.html', members=members)
 
@@ -240,11 +246,12 @@ def member_view(member_id):
                     break
     points = calc_points(member_id, conn)
     streak = calc_streak(member_id, conn)
+    badges = calc_badges(streak)
     conn.close()
     return render_template('member.html', member=member,
         today_chores=today_chores, as_needed_chores=as_needed_chores,
         upcoming_chores=upcoming_chores, week_dates=week_dates,
-        today=today_obj, points=points, streak=streak)
+        today=today_obj, points=points, streak=streak, badges=badges)
 
 @app.route('/chores')
 def chores_page():
@@ -324,6 +331,7 @@ def chart():
                            for m in members if m['id'] in mids]
             chart_data.append({'chore': dict(c), 'members': member_rows})
 
+    chores_map = {c['id']: {'name': c['name'], 'points': c['points']} for c in chore_rows}
     conn.close()
     if week_offset == 0:    week_label = 'This Week'
     elif week_offset == 1:  week_label = 'Next Week'
@@ -332,7 +340,8 @@ def chart():
 
     return render_template('chart.html', chart_data=chart_data, group_by=group_by,
         week_dates=week_dates, week_offset=week_offset, week_label=week_label, today=today,
-        day_names=['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])
+        day_names=['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+        chores_map=chores_map)
 
 @app.route('/balances')
 def balances():
@@ -353,7 +362,7 @@ def balances():
                    c.name as chore_name, c.icon as chore_icon,
                    cp.date || 'T12:00:00' as created_at
             FROM completions cp JOIN chores c ON cp.chore_id = c.id
-            WHERE cp.member_id=? AND cp.date >= ? AND c.points > 0
+            WHERE cp.member_id=? AND cp.date >= ? AND c.points != 0
             ORDER BY cp.date DESC
         ''', (m['id'], sixty_ago)).fetchall()
         combined = sorted(
@@ -695,12 +704,23 @@ def weekly_review():
             WHERE cp.member_id=? AND cp.date>=? AND cp.date<=?
             GROUP BY cp.chore_id ORDER BY cnt DESC LIMIT 1
         ''', (m['id'], start_str, end_str)).fetchone()
+        # 84-day heatmap (12 weeks)
+        heat_start = week_dates[-1] - timedelta(days=83)
+        heat_rows  = conn.execute(
+            'SELECT date, COUNT(*) as cnt FROM completions WHERE member_id=? AND date>=? GROUP BY date',
+            (m['id'], heat_start.isoformat())).fetchall()
+        heat_counts = {r['date']: r['cnt'] for r in heat_rows}
+        heatmap = [{'date': (heat_start + timedelta(days=i)).isoformat(),
+                    'count': heat_counts.get((heat_start + timedelta(days=i)).isoformat(), 0)}
+                   for i in range(84)]
         result.append({
             'id': m['id'], 'name': m['name'], 'avatar': m['avatar'], 'color': m['color'],
             'streak': streak, 'pts_week': pts_week,
             'comp_count': comp_count, 'total_due': total_due,
             'pct': round(comp_count * 100 / total_due) if total_due else 0,
             'best_chore': {'name': best['name'], 'icon': best['icon']} if best else None,
+            'badges': calc_badges(streak),
+            'heatmap': heatmap,
         })
     conn.close()
     return jsonify({'members': result})

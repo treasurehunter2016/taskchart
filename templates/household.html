@@ -21,6 +21,9 @@
                 {% if m.streak > 0 %}
                 <span class="streak-badge" style="margin-left:6px;">🔥 {{ m.streak }}d</span>
                 {% endif %}
+                {% for b in m.badges %}
+                <span class="milestone-badge">{{ b.emoji }}</span>
+                {% endfor %}
             </div>
             {% if m.due_today > 0 %}
             <div class="list-row-sub text-accent">😴 {{ m.due_today }} Due Today</div>

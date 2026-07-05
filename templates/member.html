@@ -77,6 +77,9 @@
     {% if streak > 0 %}
     <div class="member-streak-row">
         <span class="streak-badge">🔥 {{ streak }} day streak!</span>
+        {% for b in badges %}
+        <span class="milestone-badge" title="{{ b.label }} milestone">{{ b.emoji }}</span>
+        {% endfor %}
     </div>
     {% endif %}
 </div>

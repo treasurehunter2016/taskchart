@@ -140,11 +140,12 @@
 
     <!-- Points -->
     <div class="form-group">
-        <label class="form-label">🌟 Points Reward</label>
+        <label class="form-label" id="pointsLabel">🌟 Points Reward</label>
         <input type="number" class="form-input" id="chorePoints"
-               placeholder="0" min="0" max="999"
+               placeholder="0" min="-999" max="999"
                value="{{ chore.points if chore else '0' }}"
-               oninput="triggerAutoSave()">
+               oninput="updatePointsLabel(); triggerAutoSave();">
+        <div style="font-size:14px;color:var(--text3);margin-top:6px;" id="pointsHint"></div>
     </div>
 
     <!-- Assignment type -->
@@ -368,7 +369,24 @@ function deleteChore() {
     }).then(() => window.location.href = '/chores');
 }
 
+/* ── Points label ── */
+function updatePointsLabel() {
+    const v   = parseInt(document.getElementById('chorePoints').value) || 0;
+    const lbl = document.getElementById('pointsLabel');
+    const hint = document.getElementById('pointsHint');
+    if (v < 0) {
+        lbl.textContent  = '⚠️ Penalty (deducts points)';
+        lbl.style.color  = 'var(--red)';
+        hint.textContent = `Marking this chore done will deduct ${Math.abs(v)} pts.`;
+    } else {
+        lbl.textContent  = '🌟 Points Reward';
+        lbl.style.color  = '';
+        hint.textContent = '';
+    }
+}
+
 /* ── Init ── */
+updatePointsLabel();
 renderIconGrid();
 // If editing, scroll icon picker to show current icon's category
 {% if chore %}
