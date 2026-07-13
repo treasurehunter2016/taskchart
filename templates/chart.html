@@ -65,15 +65,19 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 19px; transition: all .2s;
 }
-.cell-inner.completed { background: var(--green)22; color: var(--green); font-weight: 700; }
+.cell-inner.completed  { background: var(--green)22; color: var(--green); font-weight: 700; }
+.cell-inner.completed.penalty { background: transparent; color: var(--red); font-weight: 700; }
 .cell-inner.incomplete { background: var(--red)22; color: var(--red); font-weight: 700; }
-.cell-inner.due_today { color: var(--text3); font-weight: 700; }
-.cell-inner.upcoming  { color: var(--border); }
+.cell-inner.due_today  { color: var(--text3); font-weight: 700; }
+.cell-inner.upcoming   { color: var(--border); }
+.cell-inner.not_claimed { color: var(--border); font-size: 8px; opacity: 0.5; }
 
 /* Green theme: use solid fills so cells stand out on the light green background */
-[data-theme="green"] .cell-inner.completed  { background: var(--green); color: #fff; }
-[data-theme="green"] .cell-inner.incomplete { background: var(--red);   color: #fff; }
-[data-theme="green"] .cell-inner.due_today  { background: var(--bg3); color: var(--accent); border: 1.5px solid var(--accent); }
+[data-theme="green"] .cell-inner.completed         { background: var(--green); color: #fff; }
+[data-theme="green"] .cell-inner.completed.penalty { background: transparent; color: var(--red); }
+[data-theme="green"] .cell-inner.incomplete  { background: var(--red);   color: #fff; }
+[data-theme="green"] .cell-inner.due_today   { background: var(--bg3); color: var(--accent); border: 1.5px solid var(--accent); }
+[data-theme="green"] .cell-inner.not_claimed { color: var(--border); }
 
 .legend {
     display: flex; gap: 16px; flex-wrap: wrap; padding: 12px 16px;
@@ -98,13 +102,26 @@
 .review-pct-fill    { height: 100%; border-radius: 3px; background: var(--green); transition: width .5s; }
 .review-best        { font-size: 14px; color: var(--text3); margin-top: 8px; }
 .review-loading     { text-align: center; padding: 40px; color: var(--text3); font-size: 18px; }
+/* Penalty section inside review card */
+.review-penalty-section {
+    margin-top: 10px; border-top: 1px solid var(--red)33; padding-top: 8px;
+}
+.review-penalty-header {
+    font-size: 13px; font-weight: 700; color: var(--red); margin-bottom: 5px;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.review-penalty-row {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--text2); padding: 3px 0;
+}
+.review-penalty-pts { font-weight: 700; color: var(--red); margin-left: auto; white-space: nowrap; }
 
 /* ── Heatmap ── */
 .heatmap-section  { padding: 0 16px 20px; }
 .heatmap-label    { font-size: 14px; color: var(--text3); margin-bottom: 6px; font-weight: 600; }
-.heatmap-grid     { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; }
-.heatmap-col      { display: flex; flex-direction: column; gap: 3px; }
-.heatmap-cell     { width: 100%; aspect-ratio: 1; border-radius: 2px; background: var(--bg3); }
+.heatmap-grid     { display: flex; gap: 2px; }
+.heatmap-col      { display: flex; flex-direction: column; gap: 2px; }
+.heatmap-cell     { width: 10px; height: 10px; flex-shrink: 0; border-radius: 1px; background: var(--bg3); }
 .heatmap-cell.l1  { background: var(--green); opacity: .25; }
 .heatmap-cell.l2  { background: var(--green); opacity: .50; }
 .heatmap-cell.l3  { background: var(--green); opacity: .75; }
@@ -136,7 +153,7 @@
         <button class="seg-btn {% if group_by=='profiles' %}active{% endif %}"
                 data-group="profiles" onclick="switchGroup('profiles')">Profiles</button>
         <button class="seg-btn {% if group_by=='chores' %}active{% endif %}"
-                data-group="chores"   onclick="switchGroup('chores')">Chores</button>
+                data-group="chores"   onclick="switchGroup('chores')">Tasks</button>
     </div>
 </div>
 
@@ -169,9 +186,10 @@
             </td>
         </tr>
         {% for item in section.chores %}
+        {% set is_penalty = item.chore.points is not none and item.chore.points < 0 %}
         <tr data-chore-id="{{ item.chore.id }}" data-member-id="{{ section.member.id }}">
             <td class="chore-name-cell">
-                <div class="chore-name-with-icon">
+                <div class="chore-name-with-icon" style="{{ 'color:var(--red);' if is_penalty else '' }}">
                     <span>{{ item.chore.icon }}</span><span>{{ item.chore.name }}</span>
                 </div>
             </td>
@@ -179,8 +197,8 @@
             {% set d = week_dates[loop.index0] %}
             <td class="cell" onclick="toggleCell({{ item.chore.id }}, {{ section.member.id }}, '{{ d.isoformat() }}', this)"
                 data-status="{{ status }}">
-                <div class="cell-inner {{ status }}">
-                    {% if status == 'completed' %}✓{% elif status == 'incomplete' %}✗{% elif status == 'due_today' %}✓{% elif status == 'upcoming' %}·{% endif %}
+                <div class="cell-inner {{ status }}{{ ' penalty' if is_penalty and status == 'completed' else '' }}">
+                    {% if status == 'completed' %}{{ '⚠️' if is_penalty else '✓' }}{% elif status == 'incomplete' %}✗{% elif status == 'due_today' %}○{% elif status == 'upcoming' %}·{% elif status == 'not_claimed' %}·{% endif %}
                 </div>
             </td>
             {% endfor %}
@@ -195,11 +213,12 @@
             <td colspan="8">
                 <div class="section-header-inner">
                     <div style="width:28px;height:28px;border-radius:6px;background:var(--bg3);font-size:16px;display:flex;align-items:center;justify-content:center;">{{ section.chore.icon }}</div>
-                    <strong>{{ section.chore.name }}</strong>
+                    <strong style="{{ 'color:var(--red);' if section.chore.points is not none and section.chore.points < 0 else '' }}">{{ section.chore.name }}</strong>
                     {% if section.chore.points > 0 %}<span style="font-size:15px;color:var(--text3);font-weight:400;">· {{ section.chore.points }}pts</span>{% endif %}
                 </div>
             </td>
         </tr>
+        {% set is_penalty = section.chore.points is not none and section.chore.points < 0 %}
         {% for item in section.members %}
         <tr>
             <td class="member-name-cell">
@@ -212,8 +231,8 @@
             {% set d = week_dates[loop.index0] %}
             <td class="cell" onclick="toggleCell({{ section.chore.id }}, {{ item.member.id }}, '{{ d.isoformat() }}', this)"
                 data-status="{{ status }}">
-                <div class="cell-inner {{ status }}">
-                    {% if status == 'completed' %}✓{% elif status == 'incomplete' %}✗{% elif status == 'due_today' %}✓{% elif status == 'upcoming' %}·{% endif %}
+                <div class="cell-inner {{ status }}{{ ' penalty' if is_penalty and status == 'completed' else '' }}">
+                    {% if status == 'completed' %}{{ '⚠️' if is_penalty else '✓' }}{% elif status == 'incomplete' %}✗{% elif status == 'due_today' %}○{% elif status == 'upcoming' %}·{% elif status == 'not_claimed' %}·{% endif %}
                 </div>
             </td>
             {% endfor %}
@@ -228,9 +247,9 @@
 
 <div class="legend">
     <div class="legend-item"><span style="color:var(--green);font-weight:700;">✓</span> Completed</div>
-    <div class="legend-item"><span style="color:var(--red);font-weight:700;">✗</span> Incomplete</div>
-    <div class="legend-item"><span style="color:var(--text3);font-weight:700;">✓</span> Due today</div>
-    <div class="legend-item"><span style="color:var(--border);">·</span> Upcoming</div>
+    <div class="legend-item"><span style="color:var(--red);font-weight:700;">✗</span> Missed</div>
+    <div class="legend-item"><span style="color:var(--text3);font-weight:700;">○</span> Due today</div>
+    <div class="legend-item"><span style="color:var(--border);">·</span> Not done / Upcoming</div>
 </div>
 
 {% if not chart_data %}
@@ -270,8 +289,6 @@ function changeWeek(delta) {
 /* ── Group toggle (no page reload) ── */
 function switchGroup(newGroup) {
     if (newGroup === currentGroup) return;
-    const label = newGroup === 'profiles' ? 'Profiles' : 'Chores';
-    if (!confirm(`Switch chart view to ${label}?`)) return;
     currentGroup = newGroup;
 
     // Update button states immediately
@@ -345,6 +362,45 @@ function loadReview() {
                 const best = m.best_chore
                     ? `<div class="review-best">⭐ Best: ${m.best_chore.icon} ${m.best_chore.name}</div>`
                     : '';
+                const penaltyHtml = (m.penalty_items && m.penalty_items.length) ? `
+                <div class="review-penalty-section">
+                    <div class="review-penalty-header">
+                        <span>⚠️ Penalties</span>
+                        <span>${m.penalty_pts}pts</span>
+                    </div>
+                    ${m.penalty_items.map(p => {
+                        const total = p.points * p.count;
+                        const times = p.count > 1 ? ` ×${p.count}` : '';
+                        return `<div class="review-penalty-row">
+                            <span>${p.icon}</span><span>${p.name}${times}</span>
+                            <span class="review-penalty-pts">${total}pts</span>
+                        </div>`;
+                    }).join('')}
+                </div>` : '';
+
+                // Build inline heatmap for this member
+                const cells = m.heatmap || [];
+                const maxCount = Math.max(1, ...cells.map(c => c.count));
+                let cols = '';
+                for (let col = 0; col < 12; col++) {
+                    let colHtml = '';
+                    for (let row = 0; row < 7; row++) {
+                        const c   = cells[col * 7 + row] || {count: 0, date: ''};
+                        const lvl = c.count === 0 ? 0
+                                  : c.count <= maxCount * .25 ? 1
+                                  : c.count <= maxCount * .5  ? 2
+                                  : c.count <= maxCount * .75 ? 3 : 4;
+                        colHtml += `<div class="heatmap-cell${lvl ? ' l'+lvl : ''}" title="${c.date}: ${c.count}"></div>`;
+                    }
+                    cols += `<div class="heatmap-col">${colHtml}</div>`;
+                }
+                const heatmap = `<div style="margin-top:10px;">
+                    <div class="heatmap-label" style="margin-bottom:4px;">12-week activity</div>
+                    <div class="heatmap-grid">${cols}</div>
+                </div>`;
+
+                const netSign  = m.pts_week >= 0 ? '+' : '';
+                const netColor = m.pts_week >= 0 ? 'var(--green)' : 'var(--red)';
                 return `
                 <div class="review-card">
                     <div class="review-card-header">
@@ -360,37 +416,22 @@ function loadReview() {
                     </div>
                     <div class="review-stat">
                         <span class="review-stat-label">Points earned</span>
-                        <span class="review-stat-value" style="color:var(--accent);">+${m.pts_week}</span>
+                        <span class="review-stat-value" style="color:var(--green);">+${m.reward_pts}</span>
+                    </div>
+                    <div class="review-stat">
+                        <span class="review-stat-label">Net total</span>
+                        <span class="review-stat-value" style="color:${netColor};">${netSign}${m.pts_week}</span>
                     </div>
                     <div class="review-pct-bar">
                         <div class="review-pct-fill" style="width:${pct}%;"></div>
                     </div>
                     ${best}
+                    ${penaltyHtml}
+                    ${heatmap}
                 </div>`;
             }).join('');
 
-            // Per-member heatmaps below the stat cards
-            document.getElementById('reviewHeatmap').innerHTML = data.members.map(m => {
-                const cells = m.heatmap || [];
-                const maxCount = Math.max(1, ...cells.map(c => c.count));
-                let cols = '';
-                for (let col = 0; col < 12; col++) {
-                    let colHtml = '';
-                    for (let row = 0; row < 7; row++) {
-                        const c   = cells[col * 7 + row] || {count: 0, date: ''};
-                        const lvl = c.count === 0 ? 0
-                                  : c.count <= maxCount * .25 ? 1
-                                  : c.count <= maxCount * .5  ? 2
-                                  : c.count <= maxCount * .75 ? 3 : 4;
-                        colHtml += `<div class="heatmap-cell${lvl ? ' l'+lvl : ''}" title="${c.date}: ${c.count} completions"></div>`;
-                    }
-                    cols += `<div class="heatmap-col">${colHtml}</div>`;
-                }
-                return `<div class="heatmap-section">
-                    <div class="heatmap-label">${m.avatar} ${m.name} — 12-week activity</div>
-                    <div class="heatmap-grid">${cols}</div>
-                </div>`;
-            }).join('');
+            document.getElementById('reviewHeatmap').innerHTML = '';
         });
 }
 
@@ -398,6 +439,7 @@ function loadReview() {
 function toggleCell(choreId, memberId, dateStr, td) {
     if (dateStr > TODAY_STR) return;
     if (td.dataset.status === 'not_due') return;
+    if (td.dataset.status === 'not_claimed') td.dataset.status = 'incomplete'; // treat same as incomplete for toggle
 
     const chore      = CHORES_MAP[choreId] || {};
     const choreName  = chore.name || 'this chore';
@@ -420,10 +462,13 @@ function toggleCell(choreId, memberId, dateStr, td) {
     .then(data => {
         const cellInner = td.querySelector('.cell-inner');
         const wasCompleted = data.completed;
+        const isPenalty = pts < 0;
         let newStatus = wasCompleted ? 'completed'
             : dateStr < TODAY_STR ? 'incomplete' : 'due_today';
-        cellInner.className = `cell-inner ${newStatus}`;
-        cellInner.textContent = wasCompleted ? '✓' : (newStatus === 'incomplete' ? '✗' : '✓');
+        cellInner.className = `cell-inner ${newStatus}${wasCompleted && isPenalty ? ' penalty' : ''}`;
+        if (wasCompleted)           cellInner.textContent = isPenalty ? '⚠️' : '✓';
+        else if (newStatus === 'incomplete') cellInner.textContent = '✗';
+        else                        cellInner.textContent = '○';
         td.dataset.status = newStatus;
     });
 }

@@ -4,548 +4,1723 @@
 
 {% block head %}
 <style>
-.today-header {
-    padding: 56px 20px 12px;
-    display: flex; align-items: flex-end; justify-content: space-between;
+/* ── View mini-toggle (top-right) ── */
+.view-mini-toggle {
+    display: flex; background: var(--bg3); border-radius: 8px; padding: 2px; gap: 0;
 }
-.today-title    { font-size: 37px; font-weight: 700; }
-.today-date-sub { font-size: 17px; color: var(--text3); margin-top: 2px; }
+.vmt-btn {
+    padding: 5px 14px; border: none; background: none; border-radius: 6px;
+    font-size: 16px; font-weight: 600; color: var(--text3); cursor: pointer;
+    transition: all .18s; white-space: nowrap;
+}
+.vmt-btn.active { background: var(--bg); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.14); }
 
-.claim-fab {
-    display: flex; align-items: center; gap: 6px;
-    background: var(--accent); color: #fff;
-    border: none; border-radius: 22px;
-    font-size: 17px; font-weight: 700; padding: 11px 18px;
-    cursor: pointer; box-shadow: 0 4px 16px var(--shadow);
-    white-space: nowrap; flex-shrink: 0;
-}
-.claim-fab:active { opacity: .75; }
-
-/* ── Grid ── */
-.grid-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    margin: 0 16px 16px;
-    border-radius: 14px;
-    box-shadow: 0 1px 4px var(--shadow);
-}
-.today-grid {
-    width: max-content;
-    min-width: 100%;
-    border-collapse: collapse;
-    background: var(--bg2);
-    border-radius: 14px;
-    overflow: hidden;
-}
-
-/* Header row */
-.today-grid thead { background: var(--bg3); }
-.col-task {
-    width: 148px; min-width: 130px;
-    text-align: left; padding: 10px 12px;
-    font-size: 13px; font-weight: 700; color: var(--text3);
-    text-transform: uppercase; letter-spacing: .4px;
+/* ── Board: aligned rows across all members ── */
+.today-board { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 120px; }
+.board-header {
+    display: grid;
+    grid-template-columns: 44px repeat(var(--ncols, 4), minmax(150px, 1fr));
+    position: sticky; top: 0; z-index: 20; background: var(--bg);
     border-bottom: 1px solid var(--border);
 }
-.col-member {
-    min-width: 96px; text-align: center;
-    padding: 8px 6px;
+.board-row {
+    display: grid;
+    grid-template-columns: 44px repeat(var(--ncols, 4), minmax(150px, 1fr));
     border-bottom: 1px solid var(--border);
-    border-left: 1px solid var(--border);
 }
-.member-head-avatar { font-size: 26px; line-height: 1; }
-.member-head-name   { font-size: 13px; font-weight: 700; margin-top: 2px; }
-
-/* Task rows */
-.today-grid tbody tr { background: var(--bg2); }
-.today-grid tbody tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
-
-.task-cell {
-    padding: 10px 12px;
-    background: var(--bg2);
-    border-right: 1px solid var(--border);
+.row-handle {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 1px; padding: 2px 0;
+    touch-action: none; user-select: none; -webkit-user-select: none;
+    cursor: grab; -webkit-tap-highlight-color: transparent;
 }
-.task-cell-inner { display: flex; align-items: center; gap: 8px; }
-.task-icon-sm    { font-size: 22px; flex-shrink: 0; line-height: 1; }
-.task-cell-name  { font-size: 15px; font-weight: 600; line-height: 1.2; }
-.task-cell-pts   { font-size: 12px; color: var(--text3); margin-top: 1px; }
-
-/* Check cell */
-.check-cell {
-    text-align: center; padding: 8px 4px;
-    border-left: 1px solid var(--border);
-    vertical-align: middle;
+.row-drag-grip {
+    font-size: 18px; color: var(--text3); opacity: 0.5; line-height: 1;
 }
-.cell-btn {
-    display: inline-flex; flex-direction: column; align-items: center; gap: 3px;
-    background: none; border: none; cursor: pointer;
-    min-width: 72px; padding: 4px 6px; border-radius: 10px;
-    transition: background .15s;
+.row-group-icon { font-size: 18px; opacity: 0.75; line-height: 1; }
+.card-remove-btn {
+    position: absolute; top: 3px; right: 3px;
+    background: none; border: none; color: var(--text3); font-size: 10px;
+    opacity: 0.22; cursor: pointer; padding: 3px; line-height: 1; border-radius: 4px;
+    -webkit-tap-highlight-color: transparent;
 }
-.cell-btn:active { background: var(--bg3); }
+.card-remove-btn:active { opacity: 0.9; color: var(--red); }
+.board-row.br-dragging { opacity: 0.25; }
+.board-row.br-drop-above { box-shadow: 0 -2px 0 var(--accent); }
+.board-row.br-drop-below { box-shadow: 0 2px 0 var(--accent); }
+/* ── Column header: single compact line ── */
+.mcol-hdr {
+    padding: 14px 10px; display: flex; align-items: center; gap: 6px;
+    border-right: 1px solid var(--border); border-bottom: 3px solid transparent;
+}
+.mcol-hdr:last-child { border-right: none; }
+.mcol-avatar { font-size: 22px; flex-shrink: 0; line-height: 1; }
+.mcol-name { font-size: 15px; font-weight: 700; flex: 1; }
+.mcol-pts  { font-size: 16px; font-weight: 600; white-space: nowrap; }
 
-.cell-check {
-    width: 36px; height: 36px; border-radius: 50%;
+/* ── Task cards ── */
+.task-card {
+    position: relative;
+    margin: 5px; border-radius: 14px; padding: 10px 8px 7px;
+    display: flex; flex-direction: column; align-items: center;
+    transition: background .2s; -webkit-tap-highlight-color: transparent;
+    user-select: none; -webkit-user-select: none;
+}
+.task-card.unclaimed .card-name { opacity: 0.09; }
+.task-card.unclaimed .card-top  { opacity: 0.09; }
+.task-card.unclaimed .claim-plus-btn { opacity: 0.25; }
+.claim-plus-btn {
+    margin-top: 6px; width: 28px; height: 28px; border-radius: 50%;
+    border: 1.5px dashed; background: transparent;
+    font-size: 18px; font-weight: 300; line-height: 1;
     display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; transition: all .2s;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+    transition: opacity .15s;
 }
-.cell-check.unchecked {
-    border: 2.5px solid var(--check-border);
-    background: transparent;
+.claim-plus-btn:active { opacity: .6; }
+/* Row with check-btn + emoji side by side */
+.card-top {
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px; width: 100%; margin-bottom: 5px;
 }
-[data-theme="green"] .cell-check.unchecked { border-color: var(--accent); }
-.cell-check.done {
-    background: var(--check-bg);
-    border: 2.5px solid var(--check-bg);
+.card-icon { font-size: 33px; line-height: 1; }
+.card-name {
+    font-size: 15px; font-weight: 600; text-align: center;
+    color: var(--text); line-height: 1.3;
 }
-.cell-check.done::after { content: '✓'; color: var(--check-fg); font-size: 19px; font-weight: 800; }
-
-.cell-pts-label { font-size: 12px; color: var(--text3); white-space: nowrap; }
-.cell-pts-label.earned { color: var(--green); font-weight: 700; }
-.cell-pts-label.penalty { color: var(--red); font-weight: 700; }
-
-/* Quick-claim (＋) button */
-.cell-add {
+.card-pts  { font-size: 13px; color: var(--text3); margin-left: 3px; white-space: nowrap; }
+.card-pts.penalty { color: var(--red); }
+.task-card.penalty-card { border: 1.5px solid var(--red-border); }
+.task-card.penalty-card .check-btn:not(.done) { border-color: var(--red) !important; }
+.extra-pts.neg { color: var(--red); }
+.card-goal { font-size: 13px; color: var(--text3); margin-top: 1px; }
+.card-dots    { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; margin-top: 5px; }
+.card-note    { font-size: 14px; color: var(--text3); margin-top: 4px; text-align: left; line-height: 1.5; }
+.card-comment { font-size: 14px; color: var(--text3); margin-top: 2px; font-style: italic; }
+.check-btn {
+    width: 26px; height: 26px; border-radius: 50%; border: 2px solid;
+    background: transparent; cursor: pointer; font-size: 15px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent; transition: all .15s; color: transparent;
+}
+.check-btn.done { color: #fff; }
+.count-dot {
+    width: 16px; height: 16px; border-radius: 50%;
+    font-size: 9px; font-weight: 700;
     display: inline-flex; align-items: center; justify-content: center;
-    width: 36px; height: 36px; border-radius: 50%;
-    border: 2px dashed var(--border); color: var(--text3);
-    font-size: 20px; background: none; cursor: pointer;
-    transition: all .2s;
+    cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
 }
-.cell-add:active { background: var(--bg3); border-color: var(--accent); color: var(--accent); }
+.count-dot-add {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 1.5px dashed; font-size: 11px;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; background: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
 
-/* Footer (totals) */
-.today-grid tfoot { background: var(--bg3); }
-.total-label-cell {
-    padding: 11px 12px;
-    font-size: 13px; font-weight: 700; color: var(--text3);
-    text-transform: uppercase; letter-spacing: .4px;
-    background: var(--bg3);
+/* ── Penalty zone (below Add row) ── */
+.penalty-zone { border-top: 1.5px dashed var(--red-border); margin-top: 4px; }
+.penalty-zone-hdr {
+    display: grid;
+    grid-template-columns: 44px repeat(var(--ncols, 4), minmax(150px, 1fr));
+    padding: 6px 0 2px;
+}
+
+/* ── Board group sections ── */
+.board-group-section { }
+.board-group-section.bgs-dragging { opacity: 0.25; }
+.board-group-section.bgs-drop-above { box-shadow: 0 -2px 0 var(--accent); }
+.board-group-section.bgs-drop-below { box-shadow: 0 2px 0 var(--accent); }
+.board-group-hdr {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px 4px;
     border-top: 1px solid var(--border);
-    border-right: 1px solid var(--border);
+    background: var(--bg);
 }
-.total-pts-cell {
-    text-align: center; padding: 11px 6px;
-    border-left: 1px solid var(--border);
-    border-top: 1px solid var(--border);
-    font-size: 17px; font-weight: 700;
+.board-group-drag {
+    font-size: 16px; color: var(--text3); opacity: 0.4;
+    cursor: grab; touch-action: none; user-select: none; flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
 }
-.total-pts-cell .pts-unit { font-size: 12px; font-weight: 500; color: var(--text3); }
 
-/* Empty state */
-.empty-today { text-align: center; padding: 48px 20px; color: var(--text3); font-size: 18px; }
-
-/* ── View toggle ── */
-.view-toggle {
-    display: flex; margin: 0 16px 12px;
-    background: var(--bg3); border-radius: 10px; padding: 3px;
+/* ── Board add-item button (bottom of each column) ── */
+.board-add-btn {
+    margin: 4px auto 2px; width: auto; background: none; border: none;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    display: block; padding: 6px 10px; opacity: .45;
+    -webkit-tap-highlight-color: transparent; transition: opacity .15s;
 }
-.view-tab {
-    flex: 1; text-align: center; padding: 8px 0;
-    border-radius: 8px; border: none; background: none;
-    font-size: 15px; font-weight: 600; color: var(--text3);
-    cursor: pointer; transition: all .2s;
-}
-.view-tab.active { background: var(--bg2); color: var(--text); box-shadow: 0 1px 3px var(--shadow); }
+.board-add-btn:active { opacity: 1; }
 
-/* ── Calendar timeline ── */
+/* ── Calendar ── */
 #calView { display: none; }
-.cal-unscheduled {
-    margin: 0 16px 12px; padding: 12px 14px;
-    background: var(--bg2); border-radius: 12px;
-    box-shadow: 0 1px 4px var(--shadow);
+.cal-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.cal-grid { border-collapse: collapse; width: 100%; }
+.col-time-cal { width: 48px; }
+.time-label-cell {
+    font-size: 11px; color: var(--text3); text-align: right; padding: 0 5px;
+    height: 60px; vertical-align: top; padding-top: 4px;
+    border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    white-space: nowrap;
 }
-.cal-unscheduled-title { font-size: 14px; font-weight: 700; color: var(--text3); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .4px; }
-.cal-chip {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: var(--bg3); border-radius: 16px; padding: 5px 12px;
-    font-size: 14px; font-weight: 600; margin: 3px; cursor: pointer;
-    border: 1.5px solid var(--border); transition: all .15s;
+.cal-member-hdr {
+    text-align: center; padding: 10px 4px;
+    border-right: 1px solid var(--border); border-bottom: 2px solid var(--border);
+    cursor: pointer; transition: background .2s;
+    -webkit-tap-highlight-color: transparent;
 }
-.cal-chip.done { opacity: .5; text-decoration: line-through; }
-.cal-chip:active { background: var(--bg4); }
-
-.cal-timeline { margin: 0 16px 16px; }
-.cal-hour {
-    display: flex; align-items: flex-start; gap: 10px;
-    min-height: 54px; position: relative;
+.cal-member-hdr:last-child { border-right: none; }
+.cal-member-hdr.selected { background: var(--accent)18; }
+.cal-hdr-avatar { font-size: 20px; display: block; }
+.cal-hdr-name   { font-size: 11px; font-weight: 700; color: var(--text); }
+.cal-hdr-hint   { font-size: 10px; color: var(--text3); }
+.cal-slot {
+    height: 60px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    vertical-align: top; position: relative; overflow: visible; transition: background .1s;
 }
-.cal-hour::before {
-    content: ''; position: absolute; left: 52px; top: 26px;
-    right: 0; height: 1px; background: var(--border);
-}
-.cal-hour-label {
-    width: 46px; flex-shrink: 0; font-size: 13px; font-weight: 600;
-    color: var(--text3); padding-top: 10px; text-align: right;
-}
-.cal-hour-content {
-    flex: 1; padding: 4px 0 4px 12px; min-height: 54px;
-    display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start;
-}
+.cal-slot:last-child { border-right: none; }
+.cal-slot.drag-over  { background: var(--accent)22; }
+.cal-slot-inner { position: relative; height: 60px; overflow: visible; }
+.cal-end-row .time-label-cell,
+.cal-end-row .cal-slot { height: 30px; border-bottom: none; }
+.cal-end-row .cal-slot-inner { height: 30px; }
 .cal-event {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: var(--accent)22; border: 1.5px solid var(--accent)88;
-    color: var(--accent); border-radius: 10px;
-    padding: 5px 10px; font-size: 14px; font-weight: 600;
-    cursor: pointer; transition: all .15s;
+    position: absolute; top: 2px; left: 2px; right: 2px; z-index: 5;
+    border-radius: 6px; padding: 3px 6px;
+    display: flex; align-items: flex-start; gap: 4px;
+    cursor: grab; overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+    -webkit-tap-highlight-color: transparent;
 }
-.cal-event.done { background: var(--green)22; border-color: var(--green)88; color: var(--green); }
-.cal-event:active { opacity: .7; }
-.cal-add-slot {
-    width: 100%; text-align: left; padding: 4px 12px;
-    background: none; border: none; color: var(--text3);
-    font-size: 13px; cursor: pointer; border-radius: 6px;
-    transition: background .15s; min-height: 36px;
+.cal-event:active { cursor: grabbing; }
+.cal-ck-btn {
+    flex-shrink: 0; width: 16px; height: 16px; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.7); background: transparent;
+    color: #fff; font-size: 10px; font-weight: 700; cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center; margin-top: 1px;
+    -webkit-tap-highlight-color: transparent;
 }
-.cal-add-slot:active { background: var(--bg3); }
+.cal-ck-btn.done { background: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.9); }
+.cal-ev-body { flex: 1; min-width: 0; }
+.cal-ev-name { font-size: 11px; font-weight: 600; color: #fff;
+               overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cal-ev-dur  { font-size: 10px; color: rgba(255,255,255,0.8); margin-top: 1px; }
+.cal-ev-remove {
+    flex-shrink: 0; background: rgba(0,0,0,0.25); border: none; border-radius: 4px;
+    color: rgba(255,255,255,0.85); font-size: 10px; cursor: pointer; padding: 1px 4px;
+    line-height: 1.4; align-self: flex-start; margin-top: 1px;
+    -webkit-tap-highlight-color: transparent;
+}
+.cal-ev-remove:active { background: rgba(0,0,0,0.5); }
+
+/* ── Calendar sticky header + task row ── */
+#calTable thead { position: sticky; top: 0; z-index: 20; background: var(--bg); }
+.task-row { display: none; }
+.task-row.open { display: table-row; }
+#taskRowCell {
+    padding: 6px 10px 8px;
+    border-bottom: 2px solid var(--border);
+    background: var(--bg);
+}
+.task-row-bar {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 36px;
+}
+.task-row-label { font-size: 14px; font-weight: 700; white-space: nowrap; color: var(--text3); }
+.task-row-close {
+    background: none; border: none; font-size: 20px; color: var(--text3);
+    cursor: pointer; padding: 0 4px; margin-left: auto; flex-shrink: 0;
+}
+.task-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.task-chip {
+    padding: 8px 14px; border-radius: 20px;
+    background: var(--bg3); border: 1.5px solid var(--border);
+    font-size: 14px; font-weight: 600; cursor: grab;
+    -webkit-tap-highlight-color: transparent; user-select: none; touch-action: none;
+    display: flex; align-items: center; gap: 5px; transition: border-color .15s;
+}
+.task-chip.done-chip  { opacity: .5; }
+.task-chip.dragging   { opacity: .35; }
+#dragGhost {
+    position: fixed; pointer-events: none; z-index: 9999;
+    background: var(--accent); color: #fff; padding: 8px 14px;
+    border-radius: 20px; font-size: 14px; font-weight: 700;
+    display: none; white-space: nowrap; transform: translate(-50%, -60%);
+    box-shadow: 0 4px 16px rgba(0,0,0,.35);
+}
+
+.extras-section { padding: 0 0 16px; }
+.extra-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px; border-left: 3px solid var(--border);
+    margin: 4px 12px; border-radius: 0 8px 8px 0;
+    background: var(--bg2);
+}
+.extra-who  { font-size: 20px; flex-shrink: 0; }
+.extra-group { font-size: 12px; font-weight: 700; color: var(--accent);
+               background: var(--accent)22; border-radius: 8px; padding: 2px 7px; white-space: nowrap; }
+.extra-desc { flex: 1; font-size: 15px; min-width: 0; }
+.extra-pts  { font-size: 14px; font-weight: 700; color: var(--green); white-space: nowrap; }
+.extra-del  { background: none; border: none; color: var(--text3); font-size: 16px;
+               cursor: pointer; padding: 4px; flex-shrink: 0; opacity: .6; }
+.extra-del:active { opacity: 1; color: var(--red); }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="today-header">
-    <div>
-        <div class="today-title">📅 Today</div>
-        <div class="today-date-sub">{{ today.strftime('%A, %b %-d') }}</div>
+<div class="page-header" style="padding-bottom:4px;">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <span class="page-title" style="font-size:24px;font-weight:700;">{{ date_label }}</span>
+        <a href="/today?date={{ prev_str }}" style="background:var(--bg3);border:none;border-radius:8px;padding:5px 10px;font-size:18px;color:var(--text);text-decoration:none;">‹</a>
+        <input type="date" value="{{ today_str }}"
+               style="background:var(--bg3);border:none;border-radius:8px;padding:5px 7px;font-size:14px;color:var(--text);cursor:pointer;width:auto;"
+               onchange="if(this.value)window.location='/today?date='+this.value">
+        <a href="/today?date={{ next_str }}" style="background:var(--bg3);border:none;border-radius:8px;padding:5px 10px;font-size:18px;color:var(--text);text-decoration:none;">›</a>
     </div>
-    <button class="claim-fab" onclick="openClaimSheet()">＋ Claim</button>
+    <div class="view-mini-toggle">
+        <button class="vmt-btn active" id="tabGrid"     onclick="switchView('grid')">Grid</button>
+        <button class="vmt-btn"        id="tabCalendar" onclick="switchView('calendar')">Calendar</button>
+    </div>
 </div>
 
-<!-- View toggle -->
-<div class="view-toggle">
-    <button class="view-tab active" id="tabGrid"     onclick="switchView('grid')">📋 Grid</button>
-    <button class="view-tab"        id="tabCalendar" onclick="switchView('cal')">📅 Calendar</button>
+{% macro render_task_row(row) %}
+<div class="board-row" data-task-id="{{ row.task_id }}" data-task-name="{{ row.task_name }}" data-task-icon="{{ row.task_icon }}">
+    <div class="row-handle">
+        <span class="row-drag-grip">⠿</span>
+        {% if row.task_group_icon %}<span class="row-group-icon" title="{{ row.task_group_name or '' }}">{{ row.task_group_icon }}</span>{% endif %}
+    </div>
+    {% for m in members %}
+    {% set cl = cells.get(row.task_id, {}).get(m.id) %}
+    {% if cl %}
+    {% set cnt = cl.completed_count or 0 %}
+    <div class="task-card{{ ' penalty-card' if row.task_points < 0 else '' }}" id="card-{{ cl.id }}"
+         style="background:{% if row.task_points < 0 %}{{ 'var(--red-bg-hi)' if cnt > 0 else 'var(--red-bg-lo)' }}{% else %}{{ m.color + ('40' if cnt > 0 else '16') }}{% endif %};"
+         onclick="cardTap(event,{{ cl.id }})">
+        <button class="card-remove-btn" onclick="event.stopPropagation();removeFromToday({{ cl.id }})" title="Remove from today">✕</button>
+        <div class="card-top">
+            {% set done_color = 'var(--red)' if row.task_points < 0 else m.color %}
+            <button class="check-btn {{ 'done' if cnt > 0 else '' }}"
+                    style="{{ 'background:' + done_color + ';border-color:' + done_color if cnt > 0 else ('border-color:var(--red)' if row.task_points < 0 else 'border-color:' + m.color) }}"
+                    onclick="event.stopPropagation();toggleCell({{ cl.id }},this,{{ row.task_points }},{{ m.id }})">{{ ('⚠️' if row.task_points < 0 else '✓') if cnt > 0 else '' }}</button>
+            <div class="card-icon">{{ row.task_icon }}</div>
+        </div>
+        <div class="card-name"{% if row.task_points < 0 %} style="color:var(--red);"{% endif %}>{{ row.task_name }}{% if row.task_points %}<span class="card-pts{{ ' penalty' if row.task_points < 0 else '' }}">{{ '⚠️' if row.task_points < 0 else '⭐' }}{{ row.task_points }}</span>{% endif %}</div>
+        {% if cl.goal_amount %}<div class="card-goal" id="goal-{{ cl.id }}">{{ '%g' % cl.goal_amount }}{% if cl.goal_unit %} {{ cl.goal_unit }}{% endif %}</div>{% else %}<div class="card-goal" id="goal-{{ cl.id }}" style="display:none;"></div>{% endif %}
+        <div class="card-dots" id="dots-{{ cl.id }}">
+            {% if cnt > 0 %}
+            {% for i in range(cnt) %}
+            <span class="count-dot" style="background:rgba(255,255,255,0.38);color:{{ m.color }};font-weight:800" data-claim-id="{{ cl.id }}" data-pts="{{ row.task_points }}" data-mid="{{ m.id }}" data-idx="{{ loop.index0 }}">{{ i+1 }}</span>
+            {% endfor %}
+            <span class="count-dot-add" style="border-color:{{ m.color }};color:{{ m.color }}" onclick="addCount({{ cl.id }},{{ row.task_points }},{{ m.id }})">+</span>
+            {% endif %}
+        </div>
+        <div class="card-note" id="cnote-{{ cl.id }}"></div>
+        {% if cl.goal_comment %}<div class="card-comment" id="cmt-{{ cl.id }}">{{ cl.goal_comment }}</div>{% else %}<div class="card-comment" id="cmt-{{ cl.id }}" style="display:none;"></div>{% endif %}
+    </div>
+    {% else %}
+    <div class="task-card unclaimed{{ ' penalty-card' if row.task_points < 0 else '' }}" style="background:{{ m.color }}0A;">
+        <div class="card-top">
+            <div class="card-icon">{{ row.task_icon }}</div>
+        </div>
+        <div class="card-name"{% if row.task_points < 0 %} style="color:var(--red);"{% endif %}>{{ row.task_name }}{% if row.task_points %}<span class="card-pts{{ ' penalty' if row.task_points < 0 else '' }}">{{ '⚠️' if row.task_points < 0 else '⭐' }}{{ row.task_points }}</span>{% endif %}</div>
+        <button class="claim-plus-btn"
+                style="border-color:{{ m.color }};color:{{ m.color }};"
+                onclick='claimFromCard({{ row.task_id }}, {{ m.id }}, {{ row.task_icon|tojson }}, {{ row.task_name|tojson }})'>+</button>
+    </div>
+    {% endif %}
+    {% endfor %}
 </div>
+{% endmacro %}
 
-<!-- ── GRID VIEW ── -->
+<!-- ════ GRID ════ -->
 <div id="gridView">
-{% if task_rows %}
-<div class="grid-wrap">
-<table class="today-grid" id="todayGrid">
+<div class="today-board" style="--ncols:{{ members|length }};">
+    <!-- Sticky header row -->
+    <div class="board-header">
+        <div></div>
+        {% for m in members %}
+        <div class="mcol-hdr" style="border-bottom-color:{{ m.color }};background:{{ m.color }}18;">
+            <span class="mcol-avatar">{{ m.avatar }}</span>
+            <span class="mcol-name" style="color:{{ m.color }};">{{ m.name.split(' ')[0] }}</span>
+            <span class="mcol-pts" id="hdr-pts-{{ m.id }}" style="color:{{ m.color }};">{{ member_totals[m.id] }}pts</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% for gsec in normal_groups %}
+    <div class="board-group-section" data-group-id="{{ gsec.group.id if gsec.group else '' }}">
+        {% for row in gsec.rows %}{{ render_task_row(row) }}{% endfor %}
+    </div>
+    {% endfor %}
+
+    <!-- Add-item row at bottom of each column -->
+    <div class="board-row">
+        <div></div>
+        {% for m in members %}
+        <button class="board-add-btn"
+                style="color:{{ m.color }};border-color:{{ m.color }}44;"
+                data-mid="{{ m.id }}" data-mname="{{ m.name.split(' ')[0] }}"
+                onclick="openAddItem(parseInt(this.dataset.mid), this.dataset.mname)">＋ Add</button>
+        {% endfor %}
+    </div>
+
+    {% if penalty_groups %}
+    <!-- Penalty sections below Add row -->
+    <div class="penalty-zone">
+        <div class="penalty-zone-hdr">
+            <div></div>
+            {% for m in members %}<div style="text-align:center;font-size:11px;font-weight:700;color:var(--red);opacity:.6;">⚠️ Penalties</div>{% endfor %}
+        </div>
+        {% for gsec in penalty_groups %}
+        <div class="board-group-section" data-group-id="{{ gsec.group.id }}">
+            {% for row in gsec.rows %}{{ render_task_row(row) }}{% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+</div><!-- gridView -->
+
+
+{% if extras_by_member %}
+<div class="extras-section" id="extrasSection">
+<div class="section-label" style="padding:12px 16px 4px;font-size:13px;color:var(--text3);font-weight:700;">📝 Extra Completions</div>
+{% for m in members %}{% set elist = extras_by_member.get(m.id, []) %}{% if elist %}{% for e in elist %}
+<div class="extra-row" id="extra-{{ e.id }}" style="border-left-color:{{ m.color }};">
+    <span class="extra-who">{{ m.avatar }}</span>
+    {% if e.group_name %}<span class="extra-group">{{ e.group_name }}</span>{% endif %}
+    <span class="extra-desc">{{ e.description }}</span>
+    {% if e.points %}<span class="extra-pts{{ ' neg' if e.points < 0 else '' }}">{{ '⚠️' if e.points < 0 else '⭐' }}{{ e.points }}</span>{% endif %}
+    <button class="extra-del" onclick="deleteExtra({{ e.id }}, {{ m.id }}, {{ e.points }})">✕</button>
+</div>
+{% endfor %}{% endif %}{% endfor %}
+</div>
+{% else %}
+<div id="extrasSection"></div>
+{% endif %}
+
+<!-- ════ CALENDAR ════ -->
+<div id="calView">
+<div class="cal-wrap">
+<table class="cal-grid" id="calTable">
+<colgroup>
+    <col class="col-time-cal">
+    {% for m in members %}<col style="min-width:80px;">{% endfor %}
+</colgroup>
 <thead>
 <tr>
-    <th class="col-task">Task</th>
+    <th></th>
     {% for m in members %}
-    <th class="col-member">
-        <div class="member-head-avatar">{{ m.avatar }}</div>
-        <div class="member-head-name">{{ m.name.split()[0] }}</div>
+    <th>
+        <div class="cal-member-hdr" id="cal-hdr-{{ m.id }}"
+             style="border-bottom-color:{{ m.color }};"
+             onclick="selectCalMember({{ m.id }},'{{ m.name.split(' ')[0] | e }}')">
+            <span class="cal-hdr-avatar">{{ m.avatar }}</span>
+            <div class="cal-hdr-name" style="color:{{ m.color }}">{{ m.name.split(' ')[0] }}</div>
+            <div class="cal-hdr-hint">tap tasks</div>
+        </div>
     </th>
     {% endfor %}
 </tr>
-</thead>
-<tbody>
-{% for row in task_rows %}
-<tr>
-    <td class="task-cell">
-        <div class="task-cell-inner">
-            <span class="task-icon-sm">{{ row.task_icon }}</span>
-            <div>
-                <div class="task-cell-name">{{ row.task_name }}</div>
-                <div class="task-cell-pts">
-                    {% if row.task_points > 0 %}{{ row.task_points }}⭐
-                    {% elif row.task_points < 0 %}⚠️{{ row.task_points }}pts{% endif %}
-                </div>
-            </div>
+<tr id="taskRow" class="task-row">
+    <th id="taskRowCell" colspan="{{ members|length + 1 }}">
+        <div class="task-row-bar">
+            <span class="task-row-label" id="taskPanelTitle"></span>
+            <div class="task-chips" id="taskChips" style="flex:1;"></div>
+            <button class="task-row-close" onclick="closeTaskPanel()">✕</button>
         </div>
-    </td>
-    {% for m in members %}
-    {% set task_cells = cells.get(row.task_id, {}) %}
-    {% set cl = task_cells.get(m.id) %}
-    <td class="check-cell" data-member="{{ m.id }}">
-        {% if cl %}
-        <button class="cell-btn"
-                id="cellbtn-{{ cl.id }}"
-                onclick="toggleCell({{ cl.id }}, {{ 'true' if cl.completed else 'false' }}, {{ row.task_points }}, this)">
-            <div class="cell-check {% if cl.completed %}done{% else %}unchecked{% endif %}"
-                 id="cellck-{{ cl.id }}"></div>
-            <div class="cell-pts-label {% if cl.completed %}{% if row.task_points < 0 %}penalty{% else %}earned{% endif %}{% endif %}"
-                 id="celllbl-{{ cl.id }}">
-                {% if cl.completed %}
-                    {% if row.task_points >= 0 %}+{{ row.task_points }}pts{% else %}{{ row.task_points }}pts{% endif %}
-                {% else %}
-                    {% if row.task_points != 0 %}{{ row.task_points }}⭐{% else %}—{% endif %}
-                {% endif %}
-            </div>
-        </button>
-        {% else %}
-        <button class="cell-add"
-                onclick="quickClaim({{ row.task_id }}, {{ m.id }})"
-                title="Claim for {{ m.name }}">＋</button>
-        {% endif %}
-    </td>
-    {% endfor %}
+    </th>
 </tr>
-{% endfor %}
-</tbody>
-<tfoot>
-<tr>
-    <td class="total-label-cell">Today</td>
-    {% for m in members %}
-    {% set tot = member_totals[m.id] %}
-    <td class="total-pts-cell" id="total-{{ m.id }}"
-        style="color:{% if tot > 0 %}var(--green){% elif tot < 0 %}var(--red){% else %}var(--text3){% endif %};">
-        {{ tot }} <span class="pts-unit">pts</span>
-    </td>
-    {% endfor %}
-</tr>
-</tfoot>
+</thead>
+<tbody id="calBody"></tbody>
 </table>
 </div>
-{% else %}
-<div class="empty-today">
-    <div style="font-size:52px;margin-bottom:12px;">📋</div>
-    No tasks for today yet.<br>Add tasks in the <b>Tasks</b> tab!
-</div>
-{% endif %}
-</div><!-- end #gridView -->
+</div><!-- calView -->
 
-<!-- ── CALENDAR VIEW ── -->
-<div id="calView">
-{% if task_rows %}
+<div id="dragGhost"></div>
 
-<!-- Unscheduled tasks -->
-<div class="cal-unscheduled">
-    <div class="cal-unscheduled-title">Unscheduled</div>
-    <div id="unscheduledChips">
-        {% for row in task_rows %}
-        {% for m in members %}
-        {% set task_cells = cells.get(row.task_id, {}) %}
-        {% set cl = task_cells.get(m.id) %}
-        {% if cl and not cl.scheduled_time %}
-        <span class="cal-chip {% if cl.completed %}done{% endif %}"
-              onclick="openTimeSheet({{ cl.id }}, '{{ row.task_icon }}', '{{ row.task_name | e }}', '{{ m.name.split()[0] }}')"
-              id="chip-{{ cl.id }}">
-            {{ row.task_icon }} {{ row.task_name }} · {{ m.name.split()[0] }}
-        </span>
-        {% endif %}
-        {% endfor %}
-        {% endfor %}
-    </div>
-</div>
-
-<!-- Hourly timeline 6am-10pm -->
-<div class="cal-timeline" id="calTimeline">
-    {% for h in range(6, 23) %}
-    {% set hh = '%02d' % h %}
-    <div class="cal-hour" id="hour-{{ hh }}">
-        <div class="cal-hour-label">{{ '%d%s' % (h if h <= 12 else h-12, 'am' if h < 12 else 'pm') }}</div>
-        <div class="cal-hour-content" id="hcontent-{{ hh }}">
-            {% for row in task_rows %}
-            {% for m in members %}
-            {% set task_cells = cells.get(row.task_id, {}) %}
-            {% set cl = task_cells.get(m.id) %}
-            {% if cl and cl.scheduled_time and cl.scheduled_time[:2] == hh %}
-            <div class="cal-event {% if cl.completed %}done{% endif %}"
-                 onclick="openTimeSheet({{ cl.id }}, '{{ row.task_icon }}', '{{ row.task_name | e }}', '{{ m.name.split()[0] }}')"
-                 id="calevent-{{ cl.id }}">
-                {{ row.task_icon }} {{ row.task_name }} · {{ m.name.split()[0] }}
-                <span style="font-size:12px;opacity:.7;">{{ cl.scheduled_time }}</span>
-            </div>
-            {% endif %}
-            {% endfor %}
-            {% endfor %}
-            <button class="cal-add-slot" onclick="openTimeSheetForHour('{{ hh }}:00')">＋</button>
+<!-- Edit start-time + duration sheet -->
+<div class="overlay" id="editTimeOverlay" onclick="if(event.target===this)closeTimeEdit()">
+    <div class="sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">⏰ Set Time &amp; Duration</div>
+        <div class="form-group">
+            <label class="form-label">Start time</label>
+            <input type="time" class="form-input" id="timePickerInput"
+                   style="font-size:24px;text-align:center;letter-spacing:2px;">
         </div>
-    </div>
-    {% endfor %}
-</div>
-
-{% else %}
-<div class="empty-today">
-    <div style="font-size:52px;margin-bottom:12px;">📅</div>
-    No tasks for today.
-</div>
-{% endif %}
-</div><!-- end #calView -->
-
-<div style="height:20px;"></div>
-
-<!-- ── Schedule Time Sheet ── -->
-<div class="overlay" id="timeOverlay" onclick="closeTimeSheet(event)">
-<div class="sheet" onclick="event.stopPropagation()">
-    <div class="sheet-handle"></div>
-    <div class="sheet-title" id="timeSheetTitle">Set Time Slot</div>
-    <input type="hidden" id="timeClaimId">
-    <div class="form-group">
-        <label class="form-label">Time</label>
-        <input type="time" class="form-input" id="timeValue">
-    </div>
-    <div style="display:flex;gap:8px;">
-        <button onclick="saveTime()" class="btn btn-primary" style="flex:1;">📅 Set Time</button>
-        <button onclick="clearTime()" class="btn btn-ghost" style="flex:1;">✕ Remove</button>
+        <div class="form-group">
+            <label class="form-label">Duration</label>
+            <select class="form-input" id="durationPickerInput">
+                <option value="15">15 min</option>
+                <option value="30" selected>30 min</option>
+                <option value="45">45 min</option>
+                <option value="60">1 hr</option>
+                <option value="90">1.5 hr</option>
+                <option value="120">2 hr</option>
+                <option value="custom">Custom…</option>
+            </select>
+            <input type="number" class="form-input" id="durationCustomInput"
+                   placeholder="minutes" min="5" max="480" step="5"
+                   style="display:none;margin-top:8px;">
+        </div>
+        <button class="btn btn-primary" onclick="selectEditTime(document.getElementById('timePickerInput').value)">💾 Save</button>
+        <button class="btn btn-ghost" onclick="closeTimeEdit()" style="margin-top:8px;">Cancel</button>
     </div>
 </div>
+
+<!-- Delete calendar event sheet -->
+<div class="overlay" id="deleteEventOverlay" onclick="if(event.target===this)closeDeleteSheet()">
+    <div class="sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title" id="deleteEventTitle">Remove from Calendar?</div>
+        <button class="btn btn-danger" onclick="doDeleteEvent()">Remove</button>
+        <button class="btn btn-ghost" onclick="closeDeleteSheet()" style="margin-top:8px;">Cancel</button>
+    </div>
 </div>
 
-<!-- ── Claim Sheet ── -->
-<div class="overlay" id="claimOverlay" onclick="closeClaimSheet(event)">
-<div class="sheet" onclick="event.stopPropagation()">
-    <div class="sheet-handle"></div>
-    <div class="sheet-title">Claim a Task for Today</div>
-
-    <div class="form-group">
-        <label class="form-label">Who</label>
-        <select class="form-input" id="claimMember">
-            {% for m in members %}
-            <option value="{{ m.id }}">{{ m.avatar }} {{ m.name }}</option>
-            {% endfor %}
-        </select>
+<!-- ── Edit goal sheet ── -->
+<div class="overlay" id="goalEditOverlay" onclick="if(event.target===this)closeGoalEdit()">
+    <div class="sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title" id="goalEditTitle">Edit Goal</div>
+        <div class="form-group">
+            <label class="form-label">Goal Amount <span style="color:var(--text3);font-weight:400;">(leave blank to clear)</span></label>
+            <div style="display:flex;gap:8px;">
+                <input type="number" class="form-input" id="goalAmtInput"
+                       placeholder="e.g. 30" min="0" step="any" style="flex:1;"
+                       onkeydown="if(event.key==='Enter')saveGoalEdit()">
+                <select class="form-input" id="goalUnitInput" style="flex:1;">
+                    <option value="">—</option>
+                    {% for u in goal_units %}
+                    <option value="{{ u }}">{{ u }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="form-group" style="margin-top:8px;">
+            <label class="form-label">Comment <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+            <input type="text" class="form-input" id="goalCommentInput"
+                   placeholder="e.g. Morning run, Harry Potter Ch.5…"
+                   onkeydown="if(event.key==='Enter')saveGoalEdit()">
+        </div>
+        <button onclick="saveGoalEdit()" class="btn btn-primary">💾 Save</button>
+        <button onclick="closeGoalEdit()" class="btn btn-ghost" style="margin-top:8px;">Cancel</button>
+        <button id="goalRemoveBtn" onclick="unclaimFromSheet()"
+                class="btn btn-ghost" style="margin-top:8px;color:var(--red);display:none;">🗑 Remove from Today</button>
     </div>
+</div>
 
-    <div class="form-group">
-        <label class="form-label">Task</label>
-        <select class="form-input" id="claimTask">
-            {% for t in tasks %}
-            <option value="{{ t.id }}">{{ t.icon }} {{ t.name }}</option>
-            {% endfor %}
-        </select>
+<!-- ── Dot detail note sheet ── -->
+<div class="overlay" id="dotDetailOverlay" onclick="if(event.target===this)closeDotDetail()">
+    <div class="sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title" id="dotDetailTitle">Entry Details</div>
+        <div class="form-group">
+            <label class="form-label" style="color:var(--text3);font-size:13px;">What did you complete? <span style="font-weight:400;">(optional)</span></label>
+            <input type="text" class="form-input" id="dotDetailInput"
+                   placeholder="e.g. Harry Potter P80, Moonlight Sonata..."
+                   onkeydown="if(event.key==='Enter')saveDotDetail()">
+        </div>
+        <button onclick="saveDotDetail()" class="btn btn-primary">💾 Save</button>
+        <button onclick="closeDotDetail()" class="btn btn-ghost" style="margin-top:8px;">Close</button>
     </div>
+</div>
 
-    <div class="form-group">
-        <label class="form-label">Goal <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
-        <div style="display:flex;gap:8px;">
-            <input type="number" class="form-input" id="claimAmount"
-                   placeholder="e.g. 5" min="0" step="any" style="flex:1;">
-            <select class="form-input" id="claimUnit" style="flex:1;">
-                <option value="">—</option>
-                {% for u in goal_units %}
-                <option value="{{ u }}">{{ u }}</option>
+<!-- ── Extra completion sheet ── -->
+<div class="overlay" id="extraOverlay" onclick="if(event.target===this)closeExtraSheet()">
+    <div class="sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">📝 Log Extra Completion</div>
+        <div class="form-group">
+            <label class="form-label">Who</label>
+            <select class="form-input" id="extraMember">
+                {% for m in members %}
+                <option value="{{ m.id }}">{{ m.avatar }} {{ m.name.split(' ')[0] }}</option>
                 {% endfor %}
             </select>
         </div>
+        {% if groups %}
+        <div class="form-group">
+            <label class="form-label">Group <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+            <select class="form-input" id="extraGroup">
+                <option value="">— No Group —</option>
+                {% for g in groups %}
+                <option value="{{ g.id }}">{{ g.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <div class="form-group">
+            <label class="form-label">What did you complete?</label>
+            <input type="text" class="form-input" id="extraDesc"
+                   placeholder="e.g. Piano — Moonlight Sonata, Ch.3 math problems…"
+                   onkeydown="if(event.key==='Enter')submitExtra()">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Points <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+            <input type="number" class="form-input" id="extraPts" placeholder="0" min="-999" max="999">
+        </div>
+        <button onclick="submitExtra()" class="btn btn-primary">＋ Log</button>
+        <button onclick="closeExtraSheet()" class="btn btn-ghost" style="margin-top:8px;">Cancel</button>
     </div>
+</div>
 
-    <button onclick="submitClaim()" class="btn btn-primary">✅ Claim for Today</button>
+<!-- ── Add item sheet (per-member shortcut) ── -->
+<div class="overlay" id="addItemOverlay" onclick="if(event.target===this)closeAddItem()">
+    <div class="sheet" onclick="event.stopPropagation()">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title" id="addItemTitle">＋ Add Item</div>
+
+        <!-- Section 1: pick from task catalog (all active tasks) -->
+        <div class="form-group">
+            <label class="form-label">From task list</label>
+            <select class="form-input" id="addItemTaskPicker">
+                <option value="">── Select a task ──</option>
+            </select>
+        </div>
+        <button onclick="submitPickedTask()" class="btn btn-primary" style="margin-bottom:4px;">＋ Add to Today</button>
+
+        <!-- Divider -->
+        <div style="display:flex;align-items:center;gap:8px;margin:12px 0 8px;">
+            <div style="flex:1;height:1px;background:var(--border);"></div>
+            <span style="font-size:12px;color:var(--text3);white-space:nowrap;">or add something custom</span>
+            <div style="flex:1;height:1px;background:var(--border);"></div>
+        </div>
+
+        <!-- Section 2: custom entry -->
+        <div class="form-group">
+            <label class="form-label">What?</label>
+            <input type="text" class="form-input" id="addItemDesc"
+                   placeholder="e.g. Read 30 min, Clean desk…">
+        </div>
+        <div style="display:flex;gap:10px;">
+            <div class="form-group" style="flex:1;">
+                <label class="form-label">Points</label>
+                <input type="number" class="form-input" id="addItemPts"
+                       placeholder="0" min="-999" max="999" step="1" value="0">
+            </div>
+            <div class="form-group" style="flex:2;">
+                <label class="form-label">Group</label>
+                <select class="form-input" id="addItemGroup">
+                    <option value="">No Group</option>
+                </select>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:4px;">
+            <button onclick="submitAddItem('onetime')" class="btn btn-ghost" style="flex:1;font-size:17px;">
+                ☁️ One-time
+            </button>
+            <button onclick="submitAddItem('task')" class="btn btn-primary" style="flex:1;font-size:17px;">
+                📋 Add to Tasks
+            </button>
+        </div>
+        <button onclick="closeAddItem()" class="btn btn-ghost" style="margin-top:8px;">Cancel</button>
+    </div>
 </div>
-</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-const TODAY_STR = '{{ today_str }}';
-const MEMBER_IDS = [{% for m in members %}{{ m.id }},{% endfor %}];
+const TODAY_STR        = {{ today_str | tojson }};
+const MEMBERS          = {{ members | tojson }};
+const CLAIMS_BY_MEMBER = {{ claims_by_member | tojson }};
+const ALL_TASKS        = [{% for t in tasks %}{"id":{{ t.id }},"name":{{ t.name|tojson }},"icon":{{ t.icon|tojson }},"points":{{ t.points or 0 }}},{% endfor %}];
+const ALL_GROUPS       = [{% for g in groups %}{"id":{{ g.id }},"name":{{ g.name|tojson }},"icon":{{ (g.icon or '')|tojson }}},{% endfor %}];
+
+// Flat lookup by claim id
+const CLAIMS_MAP = {};
+for (const [, list] of Object.entries(CLAIMS_BY_MEMBER))
+    for (const cl of list) CLAIMS_MAP[cl.id] = cl;
+
+// Per-cell count (initialised from server-rendered state)
+const CELL_COUNTS = {
+{% for row in task_rows %}{% for m in members %}{% set cl = cells.get(row.task_id, {}).get(m.id) %}{% if cl %}
+    {{ cl.id }}: {{ cl.completed_count or 0 }},
+{% endif %}{% endfor %}{% endfor %}
+};
+
+// Member color map (hex)
+const MCOL = { {% for m in members %}{{ m.id }}: '{{ m.color }}',{% endfor %} };
+
+// Live member totals
 const TOTALS = { {% for m in members %}{{ m.id }}: {{ member_totals[m.id] }},{% endfor %} };
 
-/* ── View switch ── */
+/* ─── View switch ─── */
 function switchView(v) {
-    const isGrid = v === 'grid';
-    document.getElementById('gridView').style.display = isGrid ? '' : 'none';
-    document.getElementById('calView').style.display  = isGrid ? 'none' : '';
-    document.getElementById('tabGrid').classList.toggle('active', isGrid);
-    document.getElementById('tabCalendar').classList.toggle('active', !isGrid);
+    document.getElementById('gridView').style.display    = v === 'grid'     ? '' : 'none';
+    document.getElementById('calView').style.display     = v === 'calendar' ? 'block' : 'none';
+    document.getElementById('tabGrid').classList.toggle('active',     v === 'grid');
+    document.getElementById('tabCalendar').classList.toggle('active', v === 'calendar');
+    if (v === 'calendar') buildCalendar();
 }
 
-/* ── Toggle cell done/undone ── */
-function toggleCell(claimId, isDone, pts, btn) {
-    const newDone = !isDone;
+/* ─── Grid checks ─── */
+function toggleCell(id, btn, pts, mid) {
+    const cur = CELL_COUNTS[id] || 0;
+    if (cur === 0) {
+        CELL_COUNTS[id] = 1;
+        btn.classList.add('done'); btn.textContent = pts < 0 ? '⚠️' : '✓';
+        renderDots(id, 1, pts, mid);
+        setCellColors(id, mid, 1);
+        updateTotals(mid, pts);
+        sendDelta(id, 1);
+    } else {
+        CELL_COUNTS[id] = 0;
+        btn.classList.remove('done'); btn.textContent = '';
+        renderDots(id, 0, pts, mid);
+        setCellColors(id, mid, 0);
+        updateTotals(mid, -earnedTotal(pts, cur));
+        sendDelta(id, -cur);
+    }
+    syncMap(id);
+}
+
+// Per-claim notes: DOT_NOTES[claimId] = ["note for count1", "note for count2", ...]
+const DOT_NOTES = {};
+(function() {
+    for (const [, list] of Object.entries(CLAIMS_BY_MEMBER)) {
+        for (const cl of list) {
+            if (cl.completion_note) {
+                try { DOT_NOTES[cl.id] = JSON.parse(cl.completion_note); }
+                catch(e) { DOT_NOTES[cl.id] = [cl.completion_note]; }
+                renderNotes(cl.id);
+            }
+        }
+    }
+})();
+
+let dotDetailClaimId = null, dotDetailIndex = null;
+function openDotDetail(claimId, pts, mid, index) {
+    dotDetailClaimId = claimId;
+    dotDetailIndex   = index;
+    const cl = CLAIMS_MAP[claimId];
+    document.getElementById('dotDetailTitle').textContent =
+        (cl ? cl.task_icon + ' ' + cl.task_name : 'Task') + ' — Entry ' + (index + 1);
+    const existing = (DOT_NOTES[claimId] || [])[index] || '';
+    document.getElementById('dotDetailInput').value = existing;
+    document.getElementById('dotDetailOverlay').classList.add('show');
+    setTimeout(() => document.getElementById('dotDetailInput').focus(), 320);
+}
+function closeDotDetail() {
+    document.getElementById('dotDetailOverlay').classList.remove('show');
+    dotDetailClaimId = dotDetailIndex = null;
+}
+function saveDotDetail() {
+    const note = document.getElementById('dotDetailInput').value.trim();
+    if (dotDetailClaimId === null) { closeDotDetail(); return; }
+    const arr = DOT_NOTES[dotDetailClaimId] || [];
+    while (arr.length <= dotDetailIndex) arr.push('');
+    arr[dotDetailIndex] = note;
+    DOT_NOTES[dotDetailClaimId] = arr;
+    renderNotes(dotDetailClaimId);
     fetch('/api/update-claim', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({claim_id: claimId, completed: newDone})
-    }).then(r => r.json()).then(() => {
-        const ck  = document.getElementById('cellck-'  + claimId);
-        const lbl = document.getElementById('celllbl-' + claimId);
-        if (ck) ck.className = 'cell-check ' + (newDone ? 'done' : 'unchecked');
-        if (lbl) {
-            if (newDone) {
-                lbl.textContent = (pts >= 0 ? '+' : '') + pts + 'pts';
-                lbl.className   = 'cell-pts-label ' + (pts < 0 ? 'penalty' : 'earned');
-            } else {
-                lbl.textContent = pts !== 0 ? pts + '⭐' : '—';
-                lbl.className   = 'cell-pts-label';
-            }
-        }
-        btn.setAttribute('onclick', `toggleCell(${claimId},${newDone},${pts},this)`);
+        body: JSON.stringify({claim_id: dotDetailClaimId, completion_note: JSON.stringify(arr)})
+    });
+    closeDotDetail();
+}
 
-        // Update running total
-        const td  = btn.closest('td');
-        const mid = parseInt(td.dataset.member);
-        if (!isNaN(mid)) {
-            TOTALS[mid] = (TOTALS[mid] || 0) + (newDone ? pts : -pts);
-            const totalCell = document.getElementById('total-' + mid);
-            if (totalCell) {
-                const t = TOTALS[mid];
-                totalCell.style.color = t > 0 ? 'var(--green)' : t < 0 ? 'var(--red)' : 'var(--text3)';
-                totalCell.innerHTML = t + ' <span class="pts-unit">pts</span>';
-            }
-        }
-        // Update calendar event style if visible
-        const ev = document.getElementById('calevent-' + claimId);
-        if (ev) ev.className = 'cal-event' + (newDone ? ' done' : '');
-        const chip = document.getElementById('chip-' + claimId);
-        if (chip) chip.className = 'cal-chip' + (newDone ? ' done' : '');
+function addCount(id, pts, mid) {
+    const cur = CELL_COUNTS[id] || 0;
+    CELL_COUNTS[id] = cur + 1;
+    renderDots(id, cur + 1, pts, mid);
+    setCellColors(id, mid, cur + 1);
+    // cur >= 1 when addCount is called (first count via toggleCell); 2nd+ = half pts
+    updateTotals(mid, cur >= 1 ? halfPts(pts) : pts);
+    sendDelta(id, 1);
+    syncMap(id);
+}
 
-        showToast(newDone ? '✅ Done! ' + (pts >= 0 ? '+' : '') + pts + 'pts' : '↩ Marked undone', 1600);
+function removeCount(id, pts, mid) {
+    const cur = CELL_COUNTS[id] || 0;
+    if (cur <= 0) return;
+    CELL_COUNTS[id] = cur - 1;
+    if (cur - 1 === 0) {
+        const btn = document.querySelector('#card-' + id + ' .check-btn');
+        if (btn) { btn.classList.remove('done'); btn.textContent = ''; }
+    }
+    renderDots(id, cur - 1, pts, mid);
+    setCellColors(id, mid, cur - 1);
+    // Removing the last (1st) completion = full pts; removing 2nd+ = half pts
+    updateTotals(mid, cur === 1 ? -pts : -halfPts(pts));
+    sendDelta(id, -1);
+    syncMap(id);
+}
+
+function setCellColors(id, mid, count) {
+    const memberCol = MCOL[mid] || '#007AFF';
+    const isPenalty = (CLAIMS_MAP[id]?.task_pts || 0) < 0;
+    const card = document.getElementById('card-' + id);
+    if (card) {
+        card.style.background = isPenalty
+            ? (count > 0 ? 'var(--red-bg-hi)' : 'var(--red-bg-lo)')
+            : (count > 0 ? memberCol + '40' : memberCol + '18');
+    }
+    const col = isPenalty ? 'var(--red)' : memberCol;
+    const btn = card?.querySelector('.check-btn');
+    if (btn) {
+        btn.style.background  = count > 0 ? col : 'transparent';
+        btn.style.borderColor = col;
+    }
+}
+
+function renderNotes(id) {
+    const el = document.getElementById('cnote-' + id);
+    if (!el) return;
+    const notes = DOT_NOTES[id] || [];
+    const lines = notes.map((n, i) => n ? `${i+1}) ${n}` : '').filter(Boolean);
+    el.textContent = lines.join('  ·  ');
+}
+
+function renderDots(id, count, pts, mid) {
+    const el = document.getElementById('dots-' + id);
+    if (!el) return;
+    if (count === 0) { el.innerHTML = ''; renderNotes(id); return; }
+    const col = MCOL[mid] || '#007AFF';
+    let h = '';
+    for (let i = 0; i < count; i++)
+        h += `<span class="count-dot" style="background:rgba(255,255,255,0.38);color:${col};font-weight:800" data-claim-id="${id}" data-pts="${pts}" data-mid="${mid}" data-idx="${i}">${i+1}</span>`;
+    h += `<span class="count-dot-add" style="border-color:${col};color:${col}" onclick="addCount(${id},${pts},${mid})">+</span>`;
+    el.innerHTML = h;
+    renderNotes(id);
+}
+
+/* Half-points for 2nd+ completions: first = full pts, rest = floor(pts/2) */
+function halfPts(pts) { return Math.trunc(pts / 2); }
+function earnedTotal(pts, count) {
+    if (count <= 0) return 0;
+    return count === 1 ? pts : pts + (count - 1) * halfPts(pts);
+}
+
+function updateTotals(mid, delta) {
+    TOTALS[mid] = (TOTALS[mid] || 0) + delta;
+    const v = TOTALS[mid];
+    const h = document.getElementById('hdr-pts-' + mid);
+    if (h) h.textContent = v + 'pts';
+}
+
+/* ── Count-dot long-press: short tap → detail, hold → delete ── */
+let _dpTimer = null, _dpDot = null, _dpMoved = false;
+const DOT_HOLD_MS = 480;
+
+function _dotHoldFire() {
+    if (!_dpDot || _dpMoved) return;
+    if (navigator.vibrate) navigator.vibrate(40);
+    _dpDot.style.transform = '';
+    const {claimId, pts, mid} = _dpDot.dataset;
+    removeCount(parseInt(claimId), parseInt(pts), parseInt(mid));
+    _dpDot = null;
+}
+function _dotDown(e) {
+    const dot = e.target.closest('.count-dot');
+    if (!dot) return;
+    _dpDot = dot; _dpMoved = false;
+    dot.style.transition = `transform ${DOT_HOLD_MS}ms linear`;
+    dot.style.transform = 'scale(1.5)';
+    _dpTimer = setTimeout(_dotHoldFire, DOT_HOLD_MS);
+}
+function _dotCancel(commit) {
+    clearTimeout(_dpTimer); _dpTimer = null;
+    if (_dpDot) {
+        _dpDot.style.transition = '';
+        _dpDot.style.transform = '';
+        if (commit && !_dpMoved) {
+            const {claimId, pts, mid, idx} = _dpDot.dataset;
+            openDotDetail(parseInt(claimId), parseInt(pts), parseInt(mid), parseInt(idx));
+        }
+        _dpDot = null;
+    }
+}
+document.addEventListener('touchstart',  _dotDown,  {passive: true});
+document.addEventListener('touchmove',   () => { _dpMoved = true; _dotCancel(false); }, {passive: true});
+document.addEventListener('touchend',    () => _dotCancel(true),  {passive: true});
+document.addEventListener('touchcancel', () => _dotCancel(false), {passive: true});
+document.addEventListener('mousedown',   _dotDown);
+document.addEventListener('mouseup',     () => _dotCancel(true));
+document.addEventListener('mouseleave',  () => _dotCancel(false));
+
+function syncMap(id) {
+    const cl = CLAIMS_MAP[id]; if (!cl) return;
+    cl.completed_count = CELL_COUNTS[id] || 0;
+    cl.completed = cl.completed_count > 0;
+    const ev = document.querySelector(`.cal-event[data-claim="${id}"]`);
+    if (ev) ev.classList.toggle('done-event', cl.completed);
+}
+
+function sendDelta(id, delta) {
+    fetch('/api/update-claim', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({claim_id: id, count_delta: delta})
     });
 }
 
-/* ── Quick-claim (＋ in cell) ── */
 function quickClaim(taskId, memberId) {
-    document.getElementById('claimTask').value   = taskId;
-    document.getElementById('claimMember').value = memberId;
-    document.getElementById('claimAmount').value = '';
-    document.getElementById('claimOverlay').classList.add('show');
+    fetch('/api/claim-task', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({task_id:taskId, member_id:memberId, date:TODAY_STR})
+    }).then(r=>r.json()).then(d=>{ if(d.success) location.reload(); });
 }
 
-/* ── Claim sheet ── */
-function openClaimSheet() {
-    document.getElementById('claimAmount').value = '';
-    document.getElementById('claimOverlay').classList.add('show');
+/* ─── Calendar ─── */
+const CAL_START = 6, CAL_END = 24;
+let calBuilt = false;
+
+/* Auto-scroll when dragging near viewport top/bottom */
+let _calScrollTimer = null;
+function _startCalScroll(clientY) {
+    _stopCalScroll();
+    const ZONE = 90, SPD = 7;
+    if (clientY < ZONE)
+        _calScrollTimer = setInterval(() => window.scrollBy(0, -SPD), 16);
+    else if (clientY > window.innerHeight - ZONE)
+        _calScrollTimer = setInterval(() => window.scrollBy(0, SPD), 16);
 }
-function closeClaimSheet(e) {
-    if (e.target === document.getElementById('claimOverlay'))
-        document.getElementById('claimOverlay').classList.remove('show');
+function _stopCalScroll() {
+    if (_calScrollTimer) { clearInterval(_calScrollTimer); _calScrollTimer = null; }
 }
-function submitClaim() {
-    const task_id     = parseInt(document.getElementById('claimTask').value);
-    const member_id   = parseInt(document.getElementById('claimMember').value);
-    const amtRaw      = document.getElementById('claimAmount').value;
-    const goal_amount = amtRaw ? parseFloat(amtRaw) : null;
-    const goal_unit   = document.getElementById('claimUnit').value || null;
+
+function buildCalendar() {
+    if (calBuilt) return; calBuilt = true;
+    const tbody = document.getElementById('calBody');
+    let html = '';
+    for (let h = CAL_START; h < CAL_END; h++) {
+        const lbl = h===12?'12pm':h<12?h+'am':(h-12)+'pm';
+        const t   = String(h).padStart(2,'0')+':00';
+        html += `<tr><td class="time-label-cell">${lbl}</td>`;
+        for (const m of MEMBERS) {
+            html += `<td class="cal-slot" data-member="${m.id}" data-time="${t}"
+                         id="slot-${m.id}-${t}"
+                         ondragover="calDragOver(event)"
+                         ondrop="calDrop(event,${m.id},'${t}')">
+                     <div class="cal-slot-inner" id="si-${m.id}-${t}"></div></td>`;
+        }
+        html += '</tr>';
+    }
+    /* Half-height end row for 11:30pm boundary */
+    html += `<tr class="cal-end-row"><td class="time-label-cell">11:30pm</td>`;
+    for (const m of MEMBERS) {
+        html += `<td class="cal-slot" data-member="${m.id}" data-time="23:30"
+                     ondragover="calDragOver(event)"
+                     ondrop="calDrop(event,${m.id},'23:30')">
+                 <div class="cal-slot-inner"></div></td>`;
+    }
+    html += '</tr>';
+    tbody.innerHTML = html;
+    // Place pre-scheduled events
+    for (const [mid, list] of Object.entries(CLAIMS_BY_MEMBER))
+        for (const cl of list)
+            if (cl.scheduled_time) placeEvent(parseInt(mid), cl.scheduled_time, cl);
+}
+
+const PX_PER_MIN = 1;  // 60px slot = 60 min → 1px per minute
+
+function getDuration(cl) {
+    if (cl.scheduled_duration) return cl.scheduled_duration;
+    if (cl.goal_unit === 'min' && cl.goal_amount) return Math.round(cl.goal_amount);
+    if (cl.goal_unit === 'hr'  && cl.goal_amount) return Math.round(cl.goal_amount * 60);
+    return 30;
+}
+
+function placeEvent(memberId, timeStr, cl) {
+    // Find the slot for the event's hour (slots are created at :00 increments)
+    const h    = parseInt(timeStr.slice(0,2));
+    const mins = parseInt(timeStr.slice(3,5)) || 0;
+    const clampedH = Math.max(CAL_START, Math.min(CAL_END - 1, h));
+    const hStr = String(clampedH).padStart(2,'0') + ':00';
+    const inner = document.getElementById('si-'+memberId+'-'+hStr);
+    if (!inner) return;
+    document.querySelector(`.cal-event[data-claim="${cl.id}"]`)?.remove();
+
+    const col     = MCOL[memberId] || '#007AFF';
+    const dur     = getDuration(cl);
+    const evH     = Math.max(22, Math.round(dur * PX_PER_MIN) - 4);
+    const topOff  = Math.round((mins / 60) * 60); // px offset within the 60px slot
+
+    const el = document.createElement('div');
+    el.className = 'cal-event';
+    el.style.cssText = `background:${cl.completed ? col : col+'AA'};height:${evH}px;top:${topOff + 2}px;`;
+    el.dataset.claim = cl.id;
+
+    // Checkmark button
+    const ck = document.createElement('button');
+    ck.className = 'cal-ck-btn' + (cl.completed ? ' done' : '');
+    ck.textContent = cl.completed ? ((cl.task_pts || 0) < 0 ? '⚠️' : '✓') : '';
+    ck.addEventListener('click', e => { e.stopPropagation(); toggleCalCheck(cl, memberId, el, ck, col); });
+
+    // Body text
+    const body = document.createElement('div');
+    body.className = 'cal-ev-body';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'cal-ev-name';
+    nameEl.textContent = cl.task_icon+' '+cl.task_name;
+    if (timeStr.slice(3,5) !== '00') {
+        // Show non-:00 minute in the event label
+        nameEl.textContent = cl.task_icon+' '+cl.task_name+' ('+timeStr.slice(0,5)+')';
+    }
+    body.appendChild(nameEl);
+    if (evH >= 44) {
+        const durEl = document.createElement('div');
+        durEl.className = 'cal-ev-dur';
+        durEl.textContent = dur + 'min';
+        body.appendChild(durEl);
+    }
+
+    // Visible remove button
+    const rmBtn = document.createElement('button');
+    rmBtn.className = 'cal-ev-remove';
+    rmBtn.textContent = '✕';
+    rmBtn.title = 'Remove from calendar';
+    rmBtn.addEventListener('click', e => { e.stopPropagation(); removeEventDirect(cl.id, memberId, el); });
+
+    el.appendChild(ck);
+    el.appendChild(body);
+    el.appendChild(rmBtn);
+
+    // ── Interaction state ──
+    let longPressed = false, clickOk = true, evTouchDragging = false;
+    let touchStartX = 0, touchStartY = 0, lpt = null;
+    const ghost = document.getElementById('dragGhost');
+
+    // Mouse: reset clickOk on each pointer down, clear on move
+    el.addEventListener('pointerdown', e => { if (e.pointerType !== 'touch') { clickOk = true; } });
+    el.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') clickOk = false; });
+    el.addEventListener('click', () => { if (clickOk && !longPressed) openTimeEdit(cl.id, memberId, hStr); });
+
+    // HTML5 drag (mouse/trackpad)
+    el.draggable = true;
+    el.addEventListener('dragstart', e => {
+        e.stopPropagation();
+        clickOk = false;
+        dndId = cl.id; dndMid = memberId;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(cl.id));
+        requestAnimationFrame(() => { el.style.opacity = '0.4'; });
+    });
+    el.addEventListener('dragend', () => {
+        el.style.opacity = '';
+        document.querySelectorAll('.cal-slot.drag-over').forEach(s => s.classList.remove('drag-over'));
+        dndId = null;
+    });
+
+    // Touch: combined long-press (→ delete) + drag (→ reschedule)
+    el.addEventListener('touchstart', e => {
+        e.stopPropagation();
+        longPressed = false; evTouchDragging = false; clickOk = true;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        lpt = setTimeout(() => { longPressed = true; openDeleteSheet(cl.id, memberId, el); }, 650);
+    }, {passive: false});
+
+    el.addEventListener('touchmove', e => {
+        const dx = e.touches[0].clientX - touchStartX;
+        const dy = e.touches[0].clientY - touchStartY;
+        if (!evTouchDragging && Math.hypot(dx, dy) > 8) {
+            clearTimeout(lpt);      // cancel pending long-press
+            evTouchDragging = true;
+            clickOk = false;
+            dndId = cl.id; dndMid = memberId;
+            ghost.textContent = cl.task_icon + ' ' + cl.task_name;
+            ghost.style.background = col;
+        }
+        if (evTouchDragging) {
+            e.preventDefault();     // stop page scroll while dragging
+            const t = e.touches[0];
+            ghost.style.display = 'block';
+            ghost.style.left = t.clientX + 'px';
+            ghost.style.top  = t.clientY + 'px';
+            _startCalScroll(t.clientY);
+            document.querySelectorAll('.cal-slot.drag-over').forEach(s => s.classList.remove('drag-over'));
+            document.elementFromPoint(t.clientX, t.clientY)?.closest('.cal-slot')?.classList.add('drag-over');
+        }
+    }, {passive: false});
+
+    el.addEventListener('touchend', e => {
+        clearTimeout(lpt);
+        _stopCalScroll();
+        ghost.style.display = 'none';
+        document.querySelectorAll('.cal-slot.drag-over').forEach(s => s.classList.remove('drag-over'));
+        if (evTouchDragging) {
+            evTouchDragging = false;
+            const t    = e.changedTouches[0];
+            const slot = document.elementFromPoint(t.clientX, t.clientY)?.closest('.cal-slot');
+            if (slot) {
+                const sm = parseInt(slot.dataset.member);
+                if (sm !== memberId) { showToast("Can't drop here — same column only"); dndId = null; return; }
+                const rect = slot.getBoundingClientRect();
+                const relY = (t.clientY - rect.top) / rect.height;
+                const snapped = snapTo15(slot.dataset.time, relY);
+                scheduleAt(cl.id, memberId, snapped);
+            }
+            dndId = null;
+        }
+    });
+
+    inner.appendChild(el);
+}
+
+/* ── Cal checkmark → syncs with grid ── */
+function toggleCalCheck(cl, memberId, el, ck, col) {
+    const newDone = !cl.completed;
+    cl.completed = newDone;
+    el.style.background = newDone ? col : col+'AA';
+    ck.classList.toggle('done', newDone);
+    const pts = cl.task_pts || 0;
+    ck.textContent = newDone ? (pts < 0 ? '⚠️' : '✓') : '';
+    if (newDone) {
+        if (!CELL_COUNTS[cl.id]) { CELL_COUNTS[cl.id] = 1; updateTotals(memberId, pts); }
+    } else {
+        const cnt = CELL_COUNTS[cl.id] || 0;
+        CELL_COUNTS[cl.id] = 0;
+        if (cnt > 0) updateTotals(memberId, -earnedTotal(pts, cnt));
+    }
+    const card = document.getElementById('card-'+cl.id);
+    if (card) {
+        const btn = card.querySelector('.check-btn');
+        if (btn) { btn.classList.toggle('done', newDone); btn.textContent = newDone ? (pts < 0 ? '⚠️' : '✓') : ''; }
+        setCellColors(cl.id, memberId, CELL_COUNTS[cl.id] || 0);
+    }
+    renderDots(cl.id, CELL_COUNTS[cl.id] || 0, pts, memberId);
+
+    fetch('/api/update-claim', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({claim_id: cl.id, completed: newDone ? 1 : 0})
+    });
+}
+
+/* ── Edit start time + duration ── */
+let editClaimId=null, editMemberId=null, editSlot=null;
+
+// Custom duration picker toggle
+document.getElementById('durationPickerInput')?.addEventListener('change', function() {
+    const custom = document.getElementById('durationCustomInput');
+    if (this.value === 'custom') { custom.style.display = ''; custom.focus(); }
+    else custom.style.display = 'none';
+});
+
+function getDurationPickerValue() {
+    const sel = document.getElementById('durationPickerInput');
+    if (sel.value === 'custom') {
+        return parseInt(document.getElementById('durationCustomInput').value) || 30;
+    }
+    return parseInt(sel.value) || 30;
+}
+
+function setDurationPicker(mins) {
+    const sel = document.getElementById('durationPickerInput');
+    const opt = [...sel.options].find(o => o.value === String(mins));
+    if (opt) { sel.value = String(mins); document.getElementById('durationCustomInput').style.display = 'none'; }
+    else { sel.value = 'custom'; document.getElementById('durationCustomInput').style.display = ''; document.getElementById('durationCustomInput').value = mins || 30; }
+}
+
+function openTimeEdit(claimId, memberId, currentSlot) {
+    editClaimId=claimId; editMemberId=memberId; editSlot=currentSlot;
+    const inp = document.getElementById('timePickerInput');
+    inp.value = currentSlot || '';
+    const cl = CLAIMS_MAP[claimId];
+    setDurationPicker(cl?.scheduled_duration || getDuration(cl || {}));
+    document.getElementById('editTimeOverlay').classList.add('show');
+    setTimeout(() => inp.focus(), 300);
+}
+function closeTimeEdit() {
+    document.getElementById('editTimeOverlay').classList.remove('show');
+    editClaimId=editMemberId=editSlot=null;
+}
+function selectEditTime(timeStr) {
+    if (!editClaimId || !timeStr) { closeTimeEdit(); return; }
+    const dur = getDurationPickerValue();
+    const cl = CLAIMS_MAP[editClaimId];
+    if (cl) {
+        document.querySelector(`.cal-event[data-claim="${editClaimId}"]`)?.remove();
+        cl.scheduled_time = timeStr;
+        cl.scheduled_duration = dur;
+        placeEvent(editMemberId, timeStr, cl);
+    }
+    fetch('/api/update-claim', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({claim_id: editClaimId, scheduled_time: timeStr, scheduled_duration: dur})
+    });
+    closeTimeEdit();
+    showToast('Time updated');
+}
+
+/* ── Delete calendar event ── */
+let delClaimId=null, delMemberId=null, delEl=null;
+
+function openDeleteSheet(claimId, memberId, el) {
+    delClaimId=claimId; delMemberId=memberId; delEl=el;
+    const cl = CLAIMS_MAP[claimId];
+    document.getElementById('deleteEventTitle').textContent =
+        (cl ? cl.task_icon+' '+cl.task_name : 'Task') + ' — Remove from calendar?';
+    document.getElementById('deleteEventOverlay').classList.add('show');
+}
+function closeDeleteSheet() {
+    document.getElementById('deleteEventOverlay').classList.remove('show');
+    delClaimId=delMemberId=delEl=null;
+}
+function doDeleteEvent() {
+    if (!delClaimId) return;
+    delEl?.remove();
+    const cl = CLAIMS_MAP[delClaimId]; if (cl) cl.scheduled_time = null;
+    fetch('/api/update-claim', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({claim_id: delClaimId, scheduled_time: ''})
+    });
+    closeDeleteSheet();
+    showToast('Removed from calendar');
+}
+
+function removeEventDirect(claimId, memberId, el) {
+    el.remove();
+    const cl = CLAIMS_MAP[claimId]; if (cl) cl.scheduled_time = null;
+    fetch('/api/update-claim', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({claim_id: claimId, scheduled_time: ''})
+    });
+    showToast('Removed from calendar');
+}
+
+/* Calendar member selection */
+let activeMid = null;
+
+function selectCalMember(memberId, name) {
+    if (activeMid === memberId) { closeTaskPanel(); return; }
+    if (activeMid !== null)
+        document.getElementById('cal-hdr-'+activeMid)?.classList.remove('selected');
+    activeMid = memberId;
+    document.getElementById('cal-hdr-'+memberId).classList.add('selected');
+    document.getElementById('taskPanelTitle').textContent = name;
+
+    // Exclude penalty tasks from calendar scheduling
+    const list  = (CLAIMS_BY_MEMBER[memberId] || []).filter(cl => (cl.task_pts || 0) >= 0);
+    const chips = document.getElementById('taskChips');
+    chips.innerHTML = '';
+    if (!list.length) {
+        chips.innerHTML = '<div style="color:var(--text3);font-size:15px;">No tasks today</div>';
+    } else {
+        const col = MCOL[memberId] || '#007AFF';
+        for (const cl of list) {
+            const chip = document.createElement('div');
+            chip.className = 'task-chip' + (cl.completed?' done-chip':'');
+            chip.style.borderColor = col + (cl.completed ? '' : '66');
+            chip.dataset.claimId  = cl.id;
+            chip.dataset.memberId = memberId;
+            chip.innerHTML = cl.task_icon+' '+cl.task_name;
+            chip.draggable = true;
+            chip.addEventListener('dragstart', chipDragStart);
+            chip.addEventListener('dragend',   chipDragEnd);
+            attachTouch(chip, cl, memberId);
+            chips.appendChild(chip);
+        }
+    }
+    document.getElementById('taskRow').classList.add('open');
+}
+
+function closeTaskPanel() {
+    document.getElementById('taskRow').classList.remove('open');
+    if (activeMid !== null) {
+        document.getElementById('cal-hdr-'+activeMid)?.classList.remove('selected');
+        activeMid = null;
+    }
+}
+
+/* HTML5 DnD */
+let dndId = null, dndMid = null;
+function chipDragStart(e) {
+    dndId  = parseInt(e.currentTarget.dataset.claimId);
+    dndMid = parseInt(e.currentTarget.dataset.memberId);
+    e.currentTarget.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dndId);
+}
+function chipDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    document.querySelectorAll('.cal-slot.drag-over').forEach(s=>s.classList.remove('drag-over'));
+}
+function calDragOver(e) {
+    e.preventDefault(); e.dataTransfer.dropEffect='move';
+    document.querySelectorAll('.cal-slot.drag-over').forEach(s=>s.classList.remove('drag-over'));
+    e.currentTarget.classList.add('drag-over');
+}
+function snapTo15(slotTime, relY) {
+    const quarter = Math.min(3, Math.max(0, Math.floor(relY * 4)));
+    const mins = quarter * 15;
+    return slotTime.slice(0,3) + String(mins).padStart(2,'0');
+}
+function calDrop(e, memberId, timeStr) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    if (!dndId) return;
+    if (memberId !== dndMid) {
+        const nm = MEMBERS.find(m=>m.id===dndMid)?.name||'';
+        showToast('Drop in '+nm.split(' ')[0]+"'s column");
+        dndId=null; return;
+    }
+    // Snap to 15-min using Y position within the slot
+    const slotEl = e.currentTarget;
+    const relY = e.offsetY / slotEl.offsetHeight;
+    const snapped = snapTo15(timeStr, relY);
+    scheduleAt(dndId, dndMid, snapped); dndId=null;
+}
+
+/* Touch DnD — passive:false on touchstart prevents iOS scroll from starting */
+function attachTouch(chip, cl, memberId) {
+    const ghost = document.getElementById('dragGhost');
+    const col   = MCOL[parseInt(memberId)] || '#007AFF';
+    let moved = false;
+
+    chip.addEventListener('touchstart', e=>{
+        e.preventDefault();  // stops the panel from scrolling on iOS
+        dndId=cl.id; dndMid=parseInt(memberId); moved=false;
+        ghost.textContent   = cl.task_icon+' '+cl.task_name;
+        ghost.style.background = col;
+        chip.classList.add('dragging');
+    },{passive:false});
+
+    chip.addEventListener('touchmove', e=>{
+        if (!dndId) return;
+        e.preventDefault(); moved=true;
+        const t=e.touches[0];
+        ghost.style.display='block';
+        ghost.style.left=t.clientX+'px'; ghost.style.top=t.clientY+'px';
+        _startCalScroll(t.clientY);
+        document.querySelectorAll('.cal-slot.drag-over').forEach(s=>s.classList.remove('drag-over'));
+        document.elementFromPoint(t.clientX,t.clientY)?.closest('.cal-slot')?.classList.add('drag-over');
+    },{passive:false});
+
+    chip.addEventListener('touchend', e=>{
+        _stopCalScroll();
+        ghost.style.display='none';
+        chip.classList.remove('dragging');
+        document.querySelectorAll('.cal-slot.drag-over').forEach(s=>s.classList.remove('drag-over'));
+        if (!moved||!dndId){dndId=null; return;}
+        const t    = e.changedTouches[0];
+        const slot = document.elementFromPoint(t.clientX, t.clientY)?.closest('.cal-slot');
+        if (!slot){dndId=null; return;}
+        const sm=parseInt(slot.dataset.member);
+        if (sm!==dndMid){
+            showToast("Can't drop here — same column only"); dndId=null; return;
+        }
+        const rect2 = slot.getBoundingClientRect();
+        const relY2 = (t.clientY - rect2.top) / rect2.height;
+        scheduleAt(dndId, dndMid, snapTo15(slot.dataset.time, relY2)); dndId=null;
+    },{passive:true});
+}
+
+function scheduleAt(claimId, memberId, timeStr) {
+    const cl=CLAIMS_MAP[claimId]||{id:claimId,task_name:'',task_icon:'📋',completed:false};
+    if (CLAIMS_MAP[claimId]) CLAIMS_MAP[claimId].scheduled_time=timeStr;
+    placeEvent(memberId, timeStr, cl);
+    fetch('/api/update-claim', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({claim_id:claimId, scheduled_time:timeStr})
+    });
+    showToast('Scheduled!');
+}
+
+/* ── Claim unclaimed task from Today grid ── */
+/* ── Goal sheet: handles both "new claim" and "edit goal" modes ── */
+let goalEditClaimId  = null;   // edit mode: existing claim id
+let goalClaimPending = null;   // claim mode: {task_id, member_id}
+
+function _openGoalSheet(title, amt, unit, isEdit, comment) {
+    document.getElementById('goalEditTitle').textContent = title;
+    document.getElementById('goalAmtInput').value    = amt != null ? amt : '';
+    document.getElementById('goalUnitInput').value   = unit || '';
+    document.getElementById('goalCommentInput').value = comment || '';
+    document.getElementById('goalRemoveBtn').style.display = isEdit ? '' : 'none';
+    document.getElementById('goalEditOverlay').classList.add('show');
+    setTimeout(() => document.getElementById('goalAmtInput').focus(), 320);
+}
+
+/* "+" on unclaimed card → ask goal before claiming (skip for penalty tasks) */
+function claimFromCard(taskId, memberId, icon, name) {
+    const isPenalty = (ALL_TASKS.find(t => t.id === taskId)?.points || 0) < 0;
+    if (isPenalty) {
+        fetch('/api/claim-task', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({task_id: taskId, member_id: memberId, date: TODAY_STR})
+        }).then(() => location.reload());
+        return;
+    }
+    goalClaimPending = {task_id: taskId, member_id: memberId};
+    goalEditClaimId  = null;
+    _openGoalSheet(icon + ' ' + name, null, null, false);
+}
+
+/* Tap on claimed card → edit goal (skip for penalty tasks) */
+function cardTap(e, claimId) {
+    if (_brActivated) { _brActivated = false; return; }
+    if (e.target.closest('.check-btn,.count-dot,.count-dot-add,.cal-ck-btn,.claim-plus-btn')) return;
+    const cl = CLAIMS_MAP[claimId];
+    if (cl && (cl.task_pts || 0) < 0) return;
+    openGoalEdit(claimId);
+}
+
+function openGoalEdit(claimId) {
+    const cl = CLAIMS_MAP[claimId];
+    if (!cl) return;
+    goalEditClaimId  = claimId;
+    goalClaimPending = null;
+    _openGoalSheet(cl.task_icon + ' ' + cl.task_name, cl.goal_amount, cl.goal_unit, true, cl.goal_comment);
+}
+
+function closeGoalEdit() {
+    document.getElementById('goalEditOverlay').classList.remove('show');
+    goalEditClaimId  = null;
+    goalClaimPending = null;
+}
+
+function saveGoalEdit() {
+    const amtRaw  = document.getElementById('goalAmtInput').value;
+    const amt     = amtRaw !== '' ? parseFloat(amtRaw) : null;
+    const unit    = document.getElementById('goalUnitInput').value || null;
+    const comment = document.getElementById('goalCommentInput').value.trim() || null;
+
+    if (goalClaimPending) {
+        const {task_id, member_id} = goalClaimPending;
+        fetch('/api/claim-task', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({task_id, member_id, goal_amount: amt, goal_unit: unit, date: TODAY_STR})
+        }).then(r => r.json()).then(d => {
+            if (d.success) { showToast('✅ Added to Today!'); setTimeout(() => location.reload(), 600); }
+        });
+        closeGoalEdit();
+        return;
+    }
+
+    if (!goalEditClaimId) return;
+
+    const cl = CLAIMS_MAP[goalEditClaimId];
+    if (cl) { cl.goal_amount = amt; cl.goal_unit = unit; cl.goal_comment = comment; }
+
+    const goalEl = document.getElementById('goal-' + goalEditClaimId);
+    if (goalEl) {
+        if (amt != null) {
+            goalEl.textContent = (Number.isInteger(amt) ? amt : +amt.toFixed(2)) + (unit ? ' ' + unit : '');
+            goalEl.style.display = '';
+        } else {
+            goalEl.style.display = 'none';
+        }
+    }
+    const cmtEl = document.getElementById('cmt-' + goalEditClaimId);
+    if (cmtEl) {
+        cmtEl.textContent = comment || '';
+        cmtEl.style.display = comment ? '' : 'none';
+    }
+    fetch('/api/update-claim', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({claim_id: goalEditClaimId, goal_amount: amt, goal_unit: unit, goal_comment: comment})
+    });
+    closeGoalEdit();
+    showToast('Saved');
+}
+
+/* Remove claim from today (edit mode only) */
+function unclaimFromSheet() {
+    if (!goalEditClaimId) return;
+    fetch('/api/unclaim-task', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({claim_id: goalEditClaimId})
+    }).then(() => { showToast('Removed'); setTimeout(() => location.reload(), 600); });
+    closeGoalEdit();
+}
+
+/* ── Extra completions ── */
+function openExtraSheet() {
+    document.getElementById('extraDesc').value = '';
+    document.getElementById('extraPts').value = '';
+    document.getElementById('extraOverlay').classList.add('show');
+    setTimeout(() => document.getElementById('extraDesc').focus(), 320);
+}
+function closeExtraSheet() {
+    document.getElementById('extraOverlay').classList.remove('show');
+}
+function submitExtra() {
+    const member_id   = parseInt(document.getElementById('extraMember').value);
+    const groupEl     = document.getElementById('extraGroup');
+    const group_id    = groupEl && groupEl.value ? parseInt(groupEl.value) : null;
+    const description = document.getElementById('extraDesc').value.trim();
+    const points      = parseInt(document.getElementById('extraPts').value) || 0;
+    if (!description) { showToast('Enter a description'); return; }
+    fetch('/api/add-extra', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({date: TODAY_STR, member_id, group_id, description, points})
+    }).then(r => r.json()).then(d => {
+        if (d.success) { closeExtraSheet(); location.reload(); }
+    });
+}
+function deleteExtra(extraId, memberId, pts) {
+    fetch('/api/delete-extra', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({extra_id: extraId})
+    }).then(() => {
+        const row = document.getElementById('extra-' + extraId);
+        if (row) row.remove();
+        updateTotals(memberId, -pts);
+        const sec = document.getElementById('extrasSection');
+        if (sec && !sec.querySelector('.extra-row')) sec.remove();
+    });
+}
+
+/* ── Per-member remove (unclaim) from Today ── */
+function removeFromToday(claimId) {
+    fetch('/api/remove-today-claim', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({claim_id: claimId})
+    }).then(r => r.json()).then(d => {
+        if (d.success) location.reload();
+        else showToast('Error removing task');
+    }).catch(() => showToast('Connection error'));
+}
+
+/* ── Per-member add-item shortcut ── */
+let _addItemMemberId = null;
+
+/* ── Board group section drag-to-reorder ── */
+let _bgsWrap = null, _bgsWrps = [], _bgsGhost = null, _bgsOffY = 0;
+
+document.addEventListener('pointerdown', e => {
+    const handle = e.target.closest('.board-group-drag');
+    if (!handle) return;
+    const sec = handle.closest('.board-group-section[data-group-id]');
+    if (!sec || !sec.dataset.groupId) return; // only named groups
+    e.preventDefault();
+    _bgsWrap = sec;
+    _bgsWrps = [...document.querySelectorAll('.board-group-section[data-group-id]')]
+                 .filter(s => s.dataset.groupId);
+    sec.classList.add('bgs-dragging');
+    const rect = sec.getBoundingClientRect();
+    _bgsOffY = e.clientY - rect.top;
+    _bgsGhost = document.createElement('div');
+    const nameEl = sec.querySelector('.board-group-hdr span:last-child');
+    const iconEl = sec.querySelector('.board-group-hdr span:first-of-type');
+    _bgsGhost.textContent = (iconEl ? iconEl.textContent : '📁') + ' ' + (nameEl ? nameEl.textContent.trim() : '');
+    Object.assign(_bgsGhost.style, {
+        position:'fixed', left:'50%', transform:'translateX(-50%)',
+        top:(e.clientY - _bgsOffY + 20)+'px',
+        padding:'8px 18px', borderRadius:'20px',
+        background:'var(--bg2)', boxShadow:'0 4px 24px rgba(0,0,0,.5)',
+        fontSize:'15px', fontWeight:'700', zIndex:9999,
+        pointerEvents:'none', whiteSpace:'nowrap', color:'var(--text)'
+    });
+    document.body.appendChild(_bgsGhost);
+    document.addEventListener('pointermove', _bgsMove, {passive:false});
+    document.addEventListener('pointerup',   _bgsEnd);
+    document.addEventListener('pointercancel', _bgsEnd);
+}, {passive:false});
+
+function _bgsMove(e) {
+    e.preventDefault();
+    _bgsGhost.style.top = (e.clientY - _bgsOffY + 20)+'px';
+    _bgsWrps.forEach(s => s.classList.remove('bgs-drop-above','bgs-drop-below'));
+    for (const s of _bgsWrps) {
+        if (s === _bgsWrap) continue;
+        const rect = s.getBoundingClientRect();
+        if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+            s.classList.add(e.clientY < rect.top + rect.height/2 ? 'bgs-drop-above' : 'bgs-drop-below');
+            break;
+        }
+    }
+}
+
+function _bgsEnd() {
+    document.removeEventListener('pointermove', _bgsMove);
+    document.removeEventListener('pointerup',   _bgsEnd);
+    document.removeEventListener('pointercancel', _bgsEnd);
+    if (_bgsGhost) { _bgsGhost.remove(); _bgsGhost = null; }
+    const above = _bgsWrps.find(s => s.classList.contains('bgs-drop-above'));
+    const below  = _bgsWrps.find(s => s.classList.contains('bgs-drop-below'));
+    const target = above || below;
+    _bgsWrps.forEach(s => s.classList.remove('bgs-dragging','bgs-drop-above','bgs-drop-below'));
+    if (target) {
+        if (above) target.parentNode.insertBefore(_bgsWrap, target);
+        else       target.parentNode.insertBefore(_bgsWrap, target.nextSibling);
+        const ids = [...document.querySelectorAll('.board-group-section[data-group-id]')]
+            .map(s => s.dataset.groupId).filter(Boolean);
+        fetch('/api/reorder-groups', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({group_ids: ids})
+        }).catch(() => {});
+    }
+    _bgsWrap = null; _bgsWrps = [];
+}
+
+/* ── Board-row drag-to-reorder (touch .row-handle column to drag) ── */
+let _brRow = null, _brRows = [], _brGhost = null, _brOffY = 0, _brRowH = 0;
+let _brActivated = false; // suppresses cardTap if drag somehow routes to a card
+
+document.addEventListener('pointerdown', e => {
+    const handle = e.target.closest('.row-handle');
+    if (!handle) return;
+    const row = handle.closest('.board-row[data-task-id]');
+    if (!row) return;
+    e.preventDefault();
+    _brRow = row;
+    const section = row.closest('.board-group-section');
+    _brRows = section
+        ? [...section.querySelectorAll('.board-row[data-task-id]')]
+        : [...document.querySelectorAll('.board-row[data-task-id]')];
+    const rect = row.getBoundingClientRect();
+    _brOffY = e.clientY - rect.top;
+    _brRowH = rect.height;
+    _brActivate(e);
+    document.addEventListener('pointermove', _brMove, {passive:false});
+    document.addEventListener('pointerup',   _brEnd);
+    document.addEventListener('pointercancel', _brEnd);
+}, {passive:false});
+
+function _brActivate(e) {
+    _brRow.classList.add('br-dragging');
+    _brGhost = document.createElement('div');
+    _brGhost.textContent = _brRow.dataset.taskIcon + ' ' + _brRow.dataset.taskName;
+    Object.assign(_brGhost.style, {
+        position:'fixed', left:'50%', transform:'translateX(-50%)',
+        top:(e.clientY - _brOffY + _brRowH/2)+'px',
+        padding:'8px 18px', borderRadius:'20px',
+        background:'var(--bg2)', boxShadow:'0 4px 24px rgba(0,0,0,.5)',
+        fontSize:'15px', fontWeight:'700', zIndex:9999,
+        pointerEvents:'none', whiteSpace:'nowrap', color:'var(--text)'
+    });
+    document.body.appendChild(_brGhost);
+}
+
+function _brMove(e) {
+    e.preventDefault();
+    _brGhost.style.top = (e.clientY - _brOffY)+'px';
+    _brRows.forEach(r => r.classList.remove('br-drop-above','br-drop-below'));
+    // Find the row whose midpoint is closest to cursor — works across gaps and extremes
+    let best = null, bestDist = Infinity;
+    for (const r of _brRows) {
+        if (r === _brRow) continue;
+        const rect = r.getBoundingClientRect();
+        const dist = Math.abs(e.clientY - (rect.top + rect.height / 2));
+        if (dist < bestDist) { bestDist = dist; best = r; }
+    }
+    if (best) {
+        const rect = best.getBoundingClientRect();
+        best.classList.add(e.clientY < rect.top + rect.height / 2 ? 'br-drop-above' : 'br-drop-below');
+    }
+}
+
+function _brEnd() {
+    document.removeEventListener('pointermove', _brMove);
+    document.removeEventListener('pointerup',   _brEnd);
+    document.removeEventListener('pointercancel', _brEnd);
+    if (_brGhost) { _brGhost.remove(); _brGhost = null; }
+    const above = _brRows.find(r => r.classList.contains('br-drop-above'));
+    const below  = _brRows.find(r => r.classList.contains('br-drop-below'));
+    const target = above || below;
+    _brRows.forEach(r => r.classList.remove('br-dragging','br-drop-above','br-drop-below'));
+    if (target) {
+        if (above) target.parentNode.insertBefore(_brRow, target);
+        else       target.parentNode.insertBefore(_brRow, target.nextSibling);
+        const ids = [...document.querySelectorAll('.board-row[data-task-id]')]
+            .map(r => parseInt(r.dataset.taskId));
+        fetch('/api/reorder-today', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({task_ids: ids})
+        }).catch(() => {});
+    }
+    _brRow = null; _brRows = [];
+    // _brActivated stays true until cardTap consumes it (suppresses tap after drag)
+}
+
+function openAddItem(memberId, memberName) {
+    _addItemMemberId = memberId;
+    document.getElementById('addItemTitle').textContent = '＋ Add for ' + memberName;
+    document.getElementById('addItemDesc').value = '';
+    document.getElementById('addItemPts').value = '0';
+
+    // Populate task picker: normal tasks first, penalties at bottom in red
+    const claimedIds = new Set((CLAIMS_BY_MEMBER[memberId] || []).map(c => c.task_id));
+    const sel = document.getElementById('addItemTaskPicker');
+    sel.innerHTML = '<option value="">── Select a task ──</option>';
+    const normalTasks  = ALL_TASKS.filter(t => t.points >= 0);
+    const penaltyTasks = ALL_TASKS.filter(t => t.points < 0);
+    for (const t of normalTasks) {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        const alreadyIn = claimedIds.has(t.id) ? ' ✓' : '';
+        opt.textContent = t.icon + ' ' + t.name + (t.points ? ' (' + t.points + 'pts)' : '') + alreadyIn;
+        sel.appendChild(opt);
+    }
+    if (penaltyTasks.length) {
+        const sep = document.createElement('option');
+        sep.disabled = true;
+        sep.textContent = '── Penalties ──';
+        sel.appendChild(sep);
+        for (const t of penaltyTasks) {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            const alreadyIn = claimedIds.has(t.id) ? ' ✓' : '';
+            opt.textContent = '⚠️ ' + t.name + ' (' + t.points + 'pts)' + alreadyIn;
+            opt.style.color = 'var(--red, #FF3B30)';
+            sel.appendChild(opt);
+        }
+    }
+    sel.value = '';
+
+    // Populate group selector for custom section
+    const grpSel = document.getElementById('addItemGroup');
+    grpSel.innerHTML = '<option value="">No Group</option>';
+    for (const g of ALL_GROUPS) {
+        const opt = document.createElement('option');
+        opt.value = g.id;
+        opt.textContent = (g.icon ? g.icon + ' ' : '') + g.name;
+        grpSel.appendChild(opt);
+    }
+    grpSel.value = '';
+
+    document.getElementById('addItemOverlay').classList.add('show');
+}
+function closeAddItem() {
+    document.getElementById('addItemOverlay').classList.remove('show');
+}
+function submitPickedTask() {
+    const sel    = document.getElementById('addItemTaskPicker');
+    const taskId = parseInt(sel.value);
+    if (!taskId) { showToast('请先选择一个任务'); return; }
+    // If already claimed, just close and navigate user's attention to the card
+    const alreadyClaimed = (CLAIMS_BY_MEMBER[_addItemMemberId] || []).some(c => c.task_id === taskId);
+    if (alreadyClaimed) { showToast('该任务已在今日列表中 ✓'); return; }
+    closeAddItem();
     fetch('/api/claim-task', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({task_id, member_id, goal_amount, goal_unit, date: TODAY_STR})
+        body: JSON.stringify({task_id: taskId, member_id: _addItemMemberId, date: TODAY_STR})
     }).then(r => r.json()).then(d => {
-        if (d.success) { showToast('✅ Task added!'); setTimeout(() => location.reload(), 700); }
-        else showToast('⚠️ Already on the list');
-    });
-    document.getElementById('claimOverlay').classList.remove('show');
+        if (d.success) location.reload();
+        else showToast('Error adding task');
+    }).catch(() => showToast('Connection error'));
 }
-
-/* ── Calendar time sheet ── */
-let _pendingHour = null;
-function openTimeSheet(claimId, icon, name, memberName) {
-    _pendingHour = null;
-    document.getElementById('timeClaimId').value = claimId;
-    document.getElementById('timeSheetTitle').textContent = icon + ' ' + name + ' · ' + memberName;
-    document.getElementById('timeOverlay').classList.add('show');
-}
-function openTimeSheetForHour(hhmm) {
-    // When tapping "＋" in an empty slot: need to pick task+member first
-    // For now just set the pending hour and open the claim sheet
-    _pendingHour = hhmm;
-    document.getElementById('claimAmount').value = '';
-    document.getElementById('claimOverlay').classList.add('show');
-}
-function closeTimeSheet(e) {
-    if (e.target === document.getElementById('timeOverlay'))
-        document.getElementById('timeOverlay').classList.remove('show');
-}
-function saveTime() {
-    const claimId = parseInt(document.getElementById('timeClaimId').value);
-    const t       = document.getElementById('timeValue').value;
-    if (!t) { showToast('⚠️ Pick a time'); return; }
-    fetch('/api/update-claim', {
+function submitAddItem(type) {
+    const desc    = document.getElementById('addItemDesc').value.trim();
+    const grpEl   = document.getElementById('addItemGroup');
+    const groupId = grpEl && grpEl.value ? parseInt(grpEl.value) : null;
+    const pts     = parseInt(document.getElementById('addItemPts').value) || 0;
+    if (!desc) { showToast('请输入描述'); return; }
+    closeAddItem();
+    // "One-time": one_time=true → stored in One-Time archive, not regular task list
+    // "Add to Tasks": one_time=false → appears in regular task catalog
+    const isOnetime = type === 'onetime';
+    fetch('/api/save-chore', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({claim_id: claimId, scheduled_time: t})
-    }).then(() => { showToast('📅 Time set!'); setTimeout(() => location.reload(), 600); });
-    document.getElementById('timeOverlay').classList.remove('show');
-}
-function clearTime() {
-    const claimId = parseInt(document.getElementById('timeClaimId').value);
-    fetch('/api/update-claim', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({claim_id: claimId, scheduled_time: ''})
-    }).then(() => { showToast('Time removed'); setTimeout(() => location.reload(), 600); });
-    document.getElementById('timeOverlay').classList.remove('show');
+        body: JSON.stringify({id: null, name: desc, icon: '📋', points: pts,
+                              assignment_type: 'specific', schedule_type: 'as_needed',
+                              schedule_days: [], member_ids: [_addItemMemberId],
+                              group_id: groupId, one_time: isOnetime})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.success) {
+            return fetch('/api/claim-task', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({task_id: d.chore_id, member_id: _addItemMemberId,
+                                     date: TODAY_STR})
+            }).then(() => location.reload());
+        } else { showToast('Error saving task'); }
+    })
+    .catch(() => showToast('Connection error'));
 }
 </script>
 {% endblock %}

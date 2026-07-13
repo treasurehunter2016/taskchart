@@ -2,6 +2,22 @@
 {% set active_tab = "household" %}
 {% block title %}Household{% endblock %}
 
+{% block head %}
+<style>
+.hh-member-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    cursor: pointer; text-decoration: none; color: inherit;
+    -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+}
+.hh-member-row:last-child { border-bottom: none; }
+.hh-member-row.mem-dragging { opacity: 0.25; }
+.hh-member-row.mem-drop-above { border-top: 2px solid var(--accent); }
+.hh-member-row.mem-drop-below { border-bottom: 2px solid var(--accent); }
+.mem-grip { font-size: 18px; color: var(--text3); opacity: 0.3; cursor: grab; touch-action: none; line-height: 1; flex-shrink: 0; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <span class="page-title">🏠 Household</span>
@@ -9,9 +25,11 @@
 </div>
 
 {% if members %}
-<div class="card">
+<div class="card" id="memberList">
     {% for m in members %}
-    <a href="/member/{{ m.id }}" class="list-row" style="text-decoration:none;color:inherit;">
+    <div class="hh-member-row" data-member-id="{{ m.id }}" data-href="/member/{{ m.id }}"
+         onclick="hhRowClick(event, this)">
+        <span class="mem-grip" onclick="event.stopPropagation()">⠿</span>
         <div class="avatar" style="background:{{ m.color }}22;">
             <span style="font-size:28px;">{{ m.avatar }}</span>
         </div>
@@ -39,7 +57,7 @@
             {% endif %}
             <span style="color:var(--text3);">›</span>
         </div>
-    </a>
+    </div>
     {% endfor %}
 </div>
 {% else %}
@@ -81,4 +99,85 @@
     </a>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _hhDragged = false;
+
+function hhRowClick(e, row) {
+    if (_hhDragged) { _hhDragged = false; return; }
+    window.location = row.dataset.href;
+}
+
+/* ── Member drag-to-reorder ── */
+let _mrRow = null, _mrRows = [], _mrGhost = null, _mrOffY = 0;
+
+document.addEventListener('pointerdown', e => {
+    const grip = e.target.closest('.mem-grip');
+    if (!grip) return;
+    const row = grip.closest('.hh-member-row[data-member-id]');
+    if (!row) return;
+    e.preventDefault();
+    _mrRow  = row;
+    _mrRows = [...document.querySelectorAll('.hh-member-row[data-member-id]')];
+    const rect = row.getBoundingClientRect();
+    _mrOffY = e.clientY - rect.top;
+    row.classList.add('mem-dragging');
+    _mrGhost = document.createElement('div');
+    _mrGhost.textContent = row.querySelector('.avatar span').textContent.trim() + ' ' + row.querySelector('.list-row-title').childNodes[0].textContent.trim();
+    Object.assign(_mrGhost.style, {
+        position:'fixed', left:'50%', transform:'translateX(-50%)',
+        top:(e.clientY - _mrOffY + rect.height/2)+'px',
+        padding:'8px 20px', borderRadius:'20px',
+        background:'var(--bg2)', boxShadow:'0 4px 24px rgba(0,0,0,.5)',
+        fontSize:'16px', fontWeight:'700', zIndex:9999,
+        pointerEvents:'none', whiteSpace:'nowrap', color:'var(--text)'
+    });
+    document.body.appendChild(_mrGhost);
+    document.addEventListener('pointermove', _mrMove, {passive:false});
+    document.addEventListener('pointerup',   _mrEnd);
+    document.addEventListener('pointercancel', _mrEnd);
+}, {passive:false});
+
+function _mrMove(e) {
+    e.preventDefault();
+    _mrGhost.style.top = (e.clientY - _mrOffY)+'px';
+    _mrRows.forEach(r => r.classList.remove('mem-drop-above','mem-drop-below'));
+    let best = null, bestDist = Infinity;
+    for (const r of _mrRows) {
+        if (r === _mrRow) continue;
+        const rect = r.getBoundingClientRect();
+        const dist = Math.abs(e.clientY - (rect.top + rect.height / 2));
+        if (dist < bestDist) { bestDist = dist; best = r; }
+    }
+    if (best) {
+        const rect = best.getBoundingClientRect();
+        best.classList.add(e.clientY < rect.top + rect.height / 2 ? 'mem-drop-above' : 'mem-drop-below');
+    }
+}
+
+function _mrEnd() {
+    document.removeEventListener('pointermove', _mrMove);
+    document.removeEventListener('pointerup',   _mrEnd);
+    document.removeEventListener('pointercancel', _mrEnd);
+    if (_mrGhost) { _mrGhost.remove(); _mrGhost = null; }
+    const above = _mrRows.find(r => r.classList.contains('mem-drop-above'));
+    const below  = _mrRows.find(r => r.classList.contains('mem-drop-below'));
+    const target = above || below;
+    _mrRows.forEach(r => r.classList.remove('mem-dragging','mem-drop-above','mem-drop-below'));
+    if (target) {
+        _hhDragged = true;
+        if (above) target.parentNode.insertBefore(_mrRow, target);
+        else       target.parentNode.insertBefore(_mrRow, target.nextSibling);
+        const ids = [...document.querySelectorAll('.hh-member-row[data-member-id]')]
+            .map(r => parseInt(r.dataset.memberId));
+        fetch('/api/reorder-members', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({member_ids: ids})
+        }).catch(() => {});
+    }
+    _mrRow = null; _mrRows = [];
+}
+</script>
 {% endblock %}

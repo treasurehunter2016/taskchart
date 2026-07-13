@@ -31,12 +31,58 @@
 }
 .redeem-btn:active { opacity: .75; }
 
+/* Redemption history */
+.redeem-log-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+}
+.redeem-log-row:last-child { border-bottom: none; }
+.redeem-log-who  { font-size: 22px; flex-shrink: 0; }
+.redeem-log-info { flex: 1; min-width: 0; }
+.redeem-log-name { font-size: 16px; font-weight: 600; }
+.redeem-log-sub  { font-size: 13px; color: var(--text3); margin-top: 1px; }
+.redeem-log-pts  { font-size: 16px; font-weight: 700; color: var(--red); white-space: nowrap; }
+.redeem-log-undo {
+    background: none; border: 1px solid var(--border); color: var(--text3);
+    border-radius: 8px; font-size: 12px; padding: 4px 8px; cursor: pointer;
+    white-space: nowrap; flex-shrink: 0;
+}
+.redeem-log-undo:active { opacity: .7; }
+
+/* Realize (taken) toggle */
+.realize-btn {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 2px solid var(--border); background: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0; color: transparent;
+    transition: all .15s; -webkit-tap-highlight-color: transparent;
+}
+.realize-btn.done {
+    background: var(--green); border-color: var(--green); color: #fff;
+}
+.realize-btn:active { opacity: .7; }
+
 /* Detail panel */
 .detail-panel {
     display: none; position: fixed; inset: 0; background: var(--bg); z-index: 500;
     overflow-y: auto; padding-bottom: 100px;
 }
 .detail-panel.show { display: block; }
+.history-seg {
+    display: flex; background: var(--bg3); border-radius: 10px; padding: 3px; gap: 0;
+    margin: 12px 16px 4px;
+}
+.history-seg-btn {
+    flex: 1; padding: 7px 0; border: none; background: none; border-radius: 8px;
+    font-size: 15px; font-weight: 600; color: var(--text3); cursor: pointer; transition: all .18s;
+}
+.history-seg-btn.active { background: var(--bg); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.13); }
+.history-section-hdr {
+    padding: 10px 16px 4px; font-size: 13px; font-weight: 700;
+    color: var(--text3); letter-spacing: .03em; text-transform: uppercase;
+    display: flex; justify-content: space-between; align-items: baseline;
+}
+.history-section-total { font-size: 14px; font-weight: 700; }
 .history-row {
     display: flex; justify-content: space-between; align-items: flex-start;
     padding: 14px 16px; border-bottom: 1px solid var(--border);
@@ -51,7 +97,7 @@
 
 {% block content %}
 <div class="page-header">
-    <span class="page-title">💰 Balances</span>
+    <span class="page-title">🎁 Rewards</span>
     <button onclick="showAdjustSheet()" style="background:none;border:none;color:var(--accent);font-size:20px;cursor:pointer;">+Adjust</button>
 </div>
 
@@ -99,12 +145,41 @@
     </button>
 </div>
 
+<!-- Redemption history (unified — all redemptions with realize toggle) -->
+<div class="section-label">🏅 Redemption History</div>
+{% if redemptions %}
+<div class="card">
+    {% for r in redemptions %}
+    <div class="redeem-log-row" id="rr-{{ r.id }}">
+        <div class="redeem-log-who" style="background:{{ r.member_color }}22;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">{{ r.member_avatar }}</div>
+        <div class="redeem-log-info">
+            <div class="redeem-log-name">{{ r.reward_name }}</div>
+            <div class="redeem-log-sub">{{ r.member_name }} · {{ r.redeemed_at[:10] }}</div>
+        </div>
+        <div class="redeem-log-pts">−{{ r.points_cost }}pts</div>
+        <button class="realize-btn {{ 'done' if r.taken_at else '' }}"
+                id="rb-{{ r.id }}"
+                onclick="toggleRealized({{ r.id }}, this)"
+                title="{{ '已兑现 — 点击撤销' if r.taken_at else '标记为已兑现' }}">✓</button>
+        <button class="redeem-log-undo" onclick="deleteRedeem({{ r.id }}, this)" title="删除记录并退还积分">🗑️</button>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card" style="padding:24px;text-align:center;color:var(--text3);font-size:18px;">暂无兑换记录</div>
+{% endif %}
+
 <!-- Member detail panel -->
 <div id="memberDetailPanel" class="detail-panel">
     <div class="page-header">
         <button onclick="closeMemberDetail()" style="background:none;border:none;color:var(--accent);font-size:20px;cursor:pointer;">✕ Close</button>
         <span id="detailMemberName" class="page-title" style="font-size:23px;"></span>
         <span></span>
+    </div>
+    <div class="history-seg">
+        <button class="history-seg-btn active" onclick="setHistoryGroup('day', this)">Day</button>
+        <button class="history-seg-btn" onclick="setHistoryGroup('week', this)">Week</button>
+        <button class="history-seg-btn" onclick="setHistoryGroup('month', this)">Month</button>
     </div>
     <div id="detailHistory"></div>
 </div>
@@ -183,38 +258,121 @@
 <script>
 const memberHistory = {{ history | tojson }};
 
-function showMemberDetail(memberId, memberName, memberAvatar) {
-    document.getElementById('detailMemberName').textContent = memberAvatar + ' ' + memberName;
+let _detailMemberId = null;
+let _historyGroup   = 'day';
+
+function historyRowHtml(h, showDate) {
+    const sign = h.points_delta >= 0 ? '+' : '';
+    const cls  = h.points_delta >= 0 ? 'positive' : 'negative';
+    let label = '';
+    if (h.type === 'completion') {
+        label = (h.chore_icon || '✅') + ' ' + (h.chore_name || 'Task completed');
+    } else if (h.type === 'extra') {
+        label = '📝' + (h.chore_name ? ' [' + h.chore_name + '] ' : ' ') + (h.reason || '');
+    } else {
+        label = h.reason || 'Manual adjustment';
+    }
+    let noteHtml = '';
+    if (h.type === 'completion' && h.completion_note) {
+        let notes = [];
+        try { notes = JSON.parse(h.completion_note).filter(n => n); }
+        catch(e) { if (h.completion_note) notes = [h.completion_note]; }
+        if (notes.length) noteHtml = `<div style="font-size:14px;color:var(--text3);margin-top:2px;">${notes.join(' · ')}</div>`;
+    }
+    let dateHtml = '';
+    if (showDate) {
+        let ds = '';
+        try { ds = new Date(h.created_at).toLocaleDateString([], {month:'short', day:'numeric'}); } catch(e) { ds = h.created_at || ''; }
+        dateHtml = `<div class="history-date">${ds}</div>`;
+    }
+    return `<div class="history-row">
+        <div style="flex:1;">
+            <div class="history-reason">${label}</div>
+            ${noteHtml}${dateHtml}
+        </div>
+        <div class="history-pts ${cls}">${sign}${h.points_delta}</div>
+    </div>`;
+}
+
+function getGroupKey(h, mode) {
+    const raw = h.created_at || '';
+    const dateStr = raw.length >= 10 ? raw.substring(0, 10) : raw;
+    if (mode === 'day') return dateStr;
+    if (mode === 'month') return dateStr.substring(0, 7);
+    // week: Sun–Sat
+    const d = new Date(dateStr + 'T12:00:00');
+    const dow = d.getDay();
+    const sun = new Date(d); sun.setDate(d.getDate() - dow);
+    return sun.toISOString().substring(0, 10);
+}
+
+function groupLabel(key, mode) {
+    if (mode === 'day') {
+        const d = new Date(key + 'T12:00:00');
+        const today = new Date(); today.setHours(12,0,0,0);
+        const yest  = new Date(today); yest.setDate(today.getDate()-1);
+        if (d.toDateString() === today.toDateString()) return 'Today';
+        if (d.toDateString() === yest.toDateString())  return 'Yesterday';
+        return d.toLocaleDateString([], {weekday:'long', month:'short', day:'numeric'});
+    }
+    if (mode === 'month') {
+        const [y, m] = key.split('-');
+        return new Date(parseInt(y), parseInt(m)-1, 1).toLocaleDateString([], {month:'long', year:'numeric'});
+    }
+    // week
+    const sun = new Date(key + 'T12:00:00');
+    const sat = new Date(sun); sat.setDate(sun.getDate() + 6);
+    const fmt = d => d.toLocaleDateString([], {month:'short', day:'numeric'});
+    return fmt(sun) + ' – ' + fmt(sat);
+}
+
+function renderHistoryPanel(memberId, mode) {
     const hist = memberHistory[String(memberId)] || memberHistory[memberId] || [];
     const container = document.getElementById('detailHistory');
-
     if (!hist.length) {
-        container.innerHTML = '<div class="card" style="padding:28px;text-align:center;color:var(--text3);font-size:18px;">No history yet — complete some chores!</div>';
-    } else {
-        container.innerHTML = '<div class="card">' + hist.map(h => {
-            const sign = h.points_delta >= 0 ? '+' : '';
-            const cls  = h.points_delta >= 0 ? 'positive' : 'negative';
-            // Try to parse date — created_at might be "2026-07-05T12:00:00" or timestamp
-            let dateStr = '';
-            try { dateStr = new Date(h.created_at).toLocaleDateString(); } catch(e) { dateStr = h.created_at || ''; }
-
-            let label = '';
-            if (h.type === 'completion') {
-                label = (h.chore_icon || '✅') + ' ' + (h.chore_name || 'Chore completed');
-            } else {
-                label = h.reason || 'Manual adjustment';
-            }
-
-            return `<div class="history-row">
-                <div style="flex:1;">
-                    <div class="history-reason">${label}</div>
-                    <div class="history-date">${dateStr}</div>
-                </div>
-                <div class="history-pts ${cls}">${sign}${h.points_delta}</div>
-            </div>`;
-        }).join('') + '</div>';
+        container.innerHTML = '<div class="card" style="padding:28px;text-align:center;color:var(--text3);font-size:18px;">No history yet — complete some tasks!</div>';
+        return;
     }
+    // Group items
+    const groups = new Map();
+    for (const h of hist) {
+        const key = getGroupKey(h, mode);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(h);
+    }
+    let html = '';
+    for (const [key, items] of groups) {
+        // Penalty completions (negative points from tasks) go last
+        items.sort((a, b) => {
+            const aP = a.type === 'completion' && (a.points_delta || 0) < 0 ? 1 : 0;
+            const bP = b.type === 'completion' && (b.points_delta || 0) < 0 ? 1 : 0;
+            return aP - bP;
+        });
+        const total = items.reduce((s, h) => s + (h.points_delta || 0), 0);
+        const sign  = total >= 0 ? '+' : '';
+        const tCls  = total >= 0 ? 'color:var(--green)' : 'color:var(--red)';
+        html += `<div class="history-section-hdr">
+            <span>${groupLabel(key, mode)}</span>
+            <span class="history-section-total" style="${tCls}">${sign}${total} pts</span>
+        </div>
+        <div class="card" style="margin:0 0 10px;">` +
+            items.map(h => historyRowHtml(h, mode !== 'day')).join('') +
+        `</div>`;
+    }
+    container.innerHTML = html;
+}
 
+function setHistoryGroup(mode, btn) {
+    _historyGroup = mode;
+    document.querySelectorAll('.history-seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (_detailMemberId !== null) renderHistoryPanel(_detailMemberId, mode);
+}
+
+function showMemberDetail(memberId, memberName, memberAvatar) {
+    _detailMemberId = memberId;
+    document.getElementById('detailMemberName').textContent = memberAvatar + ' ' + memberName;
+    renderHistoryPanel(memberId, _historyGroup);
     document.getElementById('memberDetailPanel').classList.add('show');
 }
 
@@ -285,6 +443,46 @@ function deleteReward(id) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({reward_id: id})
     }).then(() => window.location.reload());
+}
+
+function toggleRealized(redemptionId, btn) {
+    const nowDone = !btn.classList.contains('done');
+    fetch('/api/toggle-taken', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({redemption_id: redemptionId, taken: nowDone})
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            btn.classList.toggle('done', nowDone);
+            btn.title = nowDone ? '已兑现 — 点击撤销' : '标记为已兑现';
+            // Show/hide the undo button (only visible when not realized)
+            const row = document.getElementById('rr-' + redemptionId);
+            if (row) {
+                const undoBtn = row.querySelector('.redeem-log-undo');
+                if (undoBtn) undoBtn.style.display = nowDone ? 'none' : '';
+            }
+            showToast(nowDone ? '✓ 已兑现！' : '撤销兑现');
+        }
+    });
+}
+
+function undoRedeem(redemptionId, btn) {
+    deleteRedeem(redemptionId, btn);
+}
+function deleteRedeem(redemptionId, btn) {
+    if (!confirm('删除此兑换记录？积分将退还。')) return;
+    fetch('/api/undo-redeem', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({redemption_id: redemptionId})
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            const row = document.getElementById('rr-' + redemptionId);
+            if (row) row.remove();
+            showToast('🗑️ 记录已删除，积分已退还');
+            setTimeout(() => location.reload(), 1200);
+        } else {
+            showToast('⚠️ ' + (d.error || 'Could not delete'));
+        }
+    });
 }
 
 function showAdjustSheet() { document.getElementById('adjustOverlay').classList.add('show'); }

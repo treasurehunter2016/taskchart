@@ -9,6 +9,10 @@
     padding: 14px 16px; border-bottom: 1px solid var(--border);
 }
 .settings-row:last-child { border-bottom: none; }
+.settings-row.mem-dragging { opacity: 0.25; }
+.settings-row.mem-drop-above { border-top: 2px solid var(--accent); }
+.settings-row.mem-drop-below { border-bottom: 2px solid var(--accent); }
+.mem-grip { font-size: 18px; color: var(--text3); opacity: 0.3; cursor: grab; touch-action: none; user-select: none; line-height: 1; }
 .edit-btn   { background: none; border: none; color: var(--accent); font-size: 15px; cursor: pointer; }
 .delete-btn { background: none; border: none; color: var(--red);    font-size: 20px; cursor: pointer; padding: 2px 6px; }
 
@@ -73,7 +77,8 @@
 {% if members %}
 <div class="card">
     {% for m in members %}
-    <div class="settings-row">
+    <div class="settings-row" data-member-id="{{ m.id }}">
+        <span class="mem-grip">⠿</span>
         <div class="avatar" style="background:{{ m.color }}22;">{{ m.avatar }}</div>
         <div style="flex:1;">
             <div class="list-row-title fw-700">{{ m.name }}</div>
@@ -133,13 +138,16 @@
             <label class="form-label">Avatar Emoji</label>
             <div class="avatar-grid" id="avatarGrid">
                 {% set avatars = [
-                    '🙂','😊','😎','🤩','🥳','😄','🤗','🤠','🧐','😸',
-                    '🐶','🐱','🐻','🦊','🐼','🐨','🐯','🦁','🐸','🐙',
-                    '🦋','🦄','🐧','🦅','🦉','🦊','🐺','🦝','🐮','🐷',
-                    '🧙','🧚','🦸','🦹','🧜','🧝','🧞','🧌','🫅','🤴',
+                    '😊','😄','😎','🤩','🥳','🤗','🥰','😇','🤠','🧐','🤓','🤡','🎃',
+                    '🐵','🐒','🦍','🦧','🙈','🙉','🙊',
+                    '🐶','🐱','🐻','🐼','🐨','🐯','🦁','🐰','🐹','🐭','🐮','🐷','🐸','🦊','🦝','🐺','🐗','🦄','🦓','🦒','🐘','🦏','🦛','🦘','🦬',
+                    '🐅','🐆','🦙','🦌','🐐','🐑','🐎','🦥','🦦','🦨','🦡','🐿️','🦔',
+                    '🐧','🐦','🦅','🦉','🦚','🦜','🦩','🦢','🐓','🦃','🕊️','🦋',
+                    '🐙','🦑','🦀','🦞','🦐','🐳','🐬','🦈','🐠','🐡','🦭','🦕','🦖','🐢',
+                    '🧙','🧚','🦸','🧜','🧝','🧞','🧌','🤴','👸','🫅','🧑‍🎤',
                     '👨‍🚀','👩‍🚀','👨‍🎨','👩‍🎨','👨‍🍳','👩‍🍳','👨‍💻','👩‍💻','👨‍🔬','👩‍🔬',
-                    '🌟','⭐','🌈','🎯','🏆','🔥','💎','🌺','🌸','🍀',
-                    '🚀','🛸','🎭','🃏','🧩','🎪','🪄','🎠','🎡','🎢',
+                    '🌟','⭐','✨','💫','🌈','🌺','🌸','🌻','🌷','🍀','🌿','🌙','🪐','🌊','🍄',
+                    '🚀','🛸','🎭','🧩','🎪','🪄','🎸','🎹','🏄','🏆','💎','🔥','🎯','🎀','🎊',
                 ] %}
                 {% for av in avatars %}
                 <div class="avatar-opt {% if loop.first %}selected{% endif %}"
@@ -245,12 +253,81 @@ function saveMember() {
     });
 }
 function doDeleteMember(id, name) {
-    if (!confirm(`Remove ${name}? Their chore history stays in the database.`)) return;
+    if (!confirm(`Remove ${name}? Their task history stays in the database.`)) return;
     fetch('/api/delete-member', {
         method:  'POST',
         headers: {'Content-Type': 'application/json'},
         body:    JSON.stringify({member_id: id}),
     }).then(() => { showToast('🗑️ Member removed'); setTimeout(() => location.reload(), 800); });
+}
+
+/* ── Member drag-to-reorder ── */
+let _mrRow = null, _mrRows = [], _mrGhost = null, _mrOffY = 0;
+
+document.addEventListener('pointerdown', e => {
+    const grip = e.target.closest('.mem-grip');
+    if (!grip) return;
+    const row = grip.closest('.settings-row[data-member-id]');
+    if (!row) return;
+    e.preventDefault();
+    _mrRow  = row;
+    _mrRows = [...document.querySelectorAll('.settings-row[data-member-id]')];
+    const rect = row.getBoundingClientRect();
+    _mrOffY = e.clientY - rect.top;
+    row.classList.add('mem-dragging');
+    _mrGhost = document.createElement('div');
+    _mrGhost.textContent = row.querySelector('.avatar').textContent.trim() + ' ' + row.querySelector('.list-row-title').textContent.trim();
+    Object.assign(_mrGhost.style, {
+        position:'fixed', left:'50%', transform:'translateX(-50%)',
+        top:(e.clientY - _mrOffY + rect.height/2)+'px',
+        padding:'8px 20px', borderRadius:'20px',
+        background:'var(--bg2)', boxShadow:'0 4px 24px rgba(0,0,0,.5)',
+        fontSize:'16px', fontWeight:'700', zIndex:9999,
+        pointerEvents:'none', whiteSpace:'nowrap', color:'var(--text)'
+    });
+    document.body.appendChild(_mrGhost);
+    document.addEventListener('pointermove', _mrMove, {passive:false});
+    document.addEventListener('pointerup',   _mrEnd);
+    document.addEventListener('pointercancel', _mrEnd);
+}, {passive:false});
+
+function _mrMove(e) {
+    e.preventDefault();
+    _mrGhost.style.top = (e.clientY - _mrOffY)+'px';
+    _mrRows.forEach(r => r.classList.remove('mem-drop-above','mem-drop-below'));
+    let best = null, bestDist = Infinity;
+    for (const r of _mrRows) {
+        if (r === _mrRow) continue;
+        const rect = r.getBoundingClientRect();
+        const dist = Math.abs(e.clientY - (rect.top + rect.height / 2));
+        if (dist < bestDist) { bestDist = dist; best = r; }
+    }
+    if (best) {
+        const rect = best.getBoundingClientRect();
+        best.classList.add(e.clientY < rect.top + rect.height / 2 ? 'mem-drop-above' : 'mem-drop-below');
+    }
+}
+
+function _mrEnd() {
+    document.removeEventListener('pointermove', _mrMove);
+    document.removeEventListener('pointerup',   _mrEnd);
+    document.removeEventListener('pointercancel', _mrEnd);
+    if (_mrGhost) { _mrGhost.remove(); _mrGhost = null; }
+    const above = _mrRows.find(r => r.classList.contains('mem-drop-above'));
+    const below  = _mrRows.find(r => r.classList.contains('mem-drop-below'));
+    const target = above || below;
+    _mrRows.forEach(r => r.classList.remove('mem-dragging','mem-drop-above','mem-drop-below'));
+    if (target) {
+        if (above) target.parentNode.insertBefore(_mrRow, target);
+        else       target.parentNode.insertBefore(_mrRow, target.nextSibling);
+        const ids = [...document.querySelectorAll('.settings-row[data-member-id]')]
+            .map(r => parseInt(r.dataset.memberId));
+        fetch('/api/reorder-members', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({member_ids: ids})
+        }).catch(() => {});
+    }
+    _mrRow = null; _mrRows = [];
 }
 </script>
 {% endblock %}

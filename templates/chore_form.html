@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set active_tab = "chores" %}
-{% block title %}{{ 'Edit Chore' if chore else 'New Chore' }}{% endblock %}
+{% block title %}{{ 'Edit Task' if chore else 'New Task' }}{% endblock %}
 
 {% block head %}
 <style>
@@ -88,9 +88,9 @@
 {% block content %}
 <!-- Sticky top bar -->
 <div class="form-topbar">
-    <a href="/chores">← Chores</a>
+    <a href="/chores">← Tasks</a>
     <div style="text-align:center;">
-        <div style="font-size:17px;font-weight:700;">{{ 'Edit Chore' if chore else 'New Chore' }}</div>
+        <div style="font-size:17px;font-weight:700;">{{ 'Edit Task' if chore else 'New Task' }}</div>
         <div class="save-status hint" id="saveStatus">
             {% if not chore %}Type a name to begin auto‑saving{% else %}Auto‑saved{% endif %}
         </div>
@@ -131,7 +131,7 @@
 
     <!-- Name -->
     <div class="form-group">
-        <label class="form-label">Chore Name</label>
+        <label class="form-label">Task Name</label>
         <input type="text" class="form-input" id="choreName"
                placeholder="e.g. Make Bed 🛏️"
                value="{{ chore.name if chore else '' }}"
@@ -202,7 +202,7 @@
     {% if chore %}
     <div class="form-group" style="margin-top:8px;">
         <button onclick="deleteChore()" class="btn btn-danger">
-            🗑️ Delete Chore
+            🗑️ Delete Task
         </button>
     </div>
     {% endif %}
@@ -343,13 +343,10 @@ function doSave() {
             currentChoreId = data.chore_id;
             document.getElementById('choreId').value = data.chore_id;
             if (wasVersioned) {
-                // URL still shows old chore_id — update so a refresh edits the new version
                 history.replaceState({}, '', `/chores/${data.chore_id}/edit`);
-                setSaveStatus('saved', '✅ Saved (new version — history preserved)');
-            } else {
-                setSaveStatus('saved', '✅ Saved');
             }
-            setTimeout(() => setSaveStatus('hint', 'Auto‑save on'), 2500);
+            setSaveStatus('saved', '✅ Saved');
+            setTimeout(() => window.location.href = '/tasks', 1000);
         } else {
             setSaveStatus('error', '❌ Error — retry');
         }
@@ -361,7 +358,7 @@ function doSave() {
 }
 
 function deleteChore() {
-    if (!confirm('Delete this chore? Completion history will be kept.')) return;
+    if (!confirm('Delete this task? Completion history will be kept.')) return;
     fetch('/api/delete-chore', {
         method:  'POST',
         headers: {'Content-Type': 'application/json'},
@@ -377,7 +374,7 @@ function updatePointsLabel() {
     if (v < 0) {
         lbl.textContent  = '⚠️ Penalty (deducts points)';
         lbl.style.color  = 'var(--red)';
-        hint.textContent = `Marking this chore done will deduct ${Math.abs(v)} pts.`;
+        hint.textContent = `Marking this task done will deduct ${Math.abs(v)} pts.`;
     } else {
         lbl.textContent  = '🌟 Points Reward';
         lbl.style.color  = '';

@@ -107,6 +107,23 @@
 
 <div style="padding: 16px 16px 0;">
 
+    <!-- Group selector -->
+    {% if groups %}
+    <div class="form-group">
+        <label class="form-label">Group <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+        <div class="pill-row" id="groupPills">
+            {% set active_group = (chore.group_id if chore and chore.group_id else default_group_id) %}
+            <button class="pill {% if not active_group %}active{% endif %}"
+                    onclick="setGroup(null, this)">None</button>
+            {% for g in groups %}
+            <button class="pill {% if active_group == g.id %}active{% endif %}"
+                    onclick="setGroup({{ g.id }}, this)">{{ g.icon }} {{ g.name }}</button>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    <input type="hidden" id="selectedGroup" value="{{ (chore.group_id if chore and chore.group_id else default_group_id) or '' }}">
+
     <!-- Icon preview + picker -->
     <div class="form-group">
         <div class="icon-preview" id="iconPreview">{{ chore.icon if chore else '📋' }}</div>
@@ -139,7 +156,7 @@
 
     <!-- Name -->
     <div class="form-group">
-        <label class="form-label">Chore Name</label>
+        <label class="form-label">Task Name</label>
         <input type="text" class="form-input" id="choreName"
                placeholder="e.g. Make Bed 🛏️"
                value="{{ chore.name if chore else '' }}"
@@ -210,11 +227,12 @@
     <div class="form-group" style="margin-top:8px;">
         {% if chore %}
         <div class="form-action-row">
-            <button onclick="doSave()" class="btn btn-primary">💾 Save</button>
-            <button onclick="deleteChore()" class="btn btn-danger">🗑️ Delete</button>
+            <button onclick="doSaveAndBack()"  class="btn btn-primary" style="flex:2;">💾 Save</button>
+            <button onclick="archiveChore()"  class="btn btn-ghost">🗄️ Archive</button>
+            <button onclick="hardDeleteChore()" class="btn btn-danger">🗑️ Delete</button>
         </div>
         {% else %}
-        <button onclick="doSave()" class="btn btn-primary">💾 Save Task</button>
+        <button onclick="doSaveAndBack()" class="btn btn-primary">💾 Save Task</button>
         {% endif %}
     </div>
 
@@ -270,6 +288,14 @@ function selectIcon(icon, el) {
     el.classList.add('selected');
     document.getElementById('selectedIcon').value = icon;
     document.getElementById('iconPreview').textContent = icon;
+    triggerAutoSave();
+}
+
+/* ── Group selector ── */
+function setGroup(groupId, el) {
+    document.querySelectorAll('#groupPills .pill').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('selectedGroup').value = groupId || '';
     triggerAutoSave();
 }
 
@@ -331,6 +357,7 @@ function doSave() {
     if (!name) return;
 
     saveInFlight = true;
+    const groupRaw = document.getElementById('selectedGroup')?.value;
     const payload = {
         id:              currentChoreId,
         name,
@@ -340,6 +367,7 @@ function doSave() {
         schedule_type:   document.getElementById('selectedSchedule').value,
         schedule_days:   Array.from(selectedDays),
         member_ids:      Array.from(selectedMemberIds),
+        group_id:        groupRaw ? parseInt(groupRaw) : null,
     };
 
     fetch('/api/save-chore', {
@@ -372,12 +400,55 @@ function doSave() {
     });
 }
 
-function deleteChore() {
-    if (!confirm('Delete this chore? Completion history will be kept.')) return;
-    fetch('/api/delete-chore', {
+function doSaveAndBack() {
+    clearTimeout(saveTimer);
+    const name = document.getElementById('choreName').value.trim();
+    if (!name) { setSaveStatus('error', '❌ Name required'); return; }
+    if (saveInFlight) { setTimeout(doSaveAndBack, 300); return; }
+    saveInFlight = true;
+    const groupRaw = document.getElementById('selectedGroup')?.value;
+    const payload = {
+        id:              currentChoreId,
+        name,
+        icon:            document.getElementById('selectedIcon').value,
+        points:          parseInt(document.getElementById('chorePoints').value) || 0,
+        assignment_type: document.getElementById('selectedAssign').value,
+        schedule_type:   document.getElementById('selectedSchedule').value,
+        schedule_days:   Array.from(selectedDays),
+        member_ids:      Array.from(selectedMemberIds),
+        group_id:        groupRaw ? parseInt(groupRaw) : null,
+    };
+    fetch('/api/save-chore', {
         method:  'POST',
         headers: {'Content-Type': 'application/json'},
-        body:    JSON.stringify({chore_id: parseInt(document.getElementById('choreId').value)}),
+        body:    JSON.stringify(payload),
+    })
+    .then(r => r.json())
+    .then(data => {
+        saveInFlight = false;
+        if (data.success) {
+            window.location.href = '/tasks';
+        } else {
+            setSaveStatus('error', '❌ ' + (data.error || 'Save failed'));
+        }
+    })
+    .catch(() => { saveInFlight = false; setSaveStatus('error', '❌ Connection error'); });
+}
+
+function archiveChore() {
+    if (!confirm('Archive this task? Hidden from Today and Calendar; can be restored from the task list.')) return;
+    fetch('/api/delete-chore', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({chore_id: parseInt(document.getElementById('choreId').value)}),
+    }).then(() => window.location.href = '/tasks');
+}
+
+function hardDeleteChore() {
+    const name = document.getElementById('choreName').value.trim() || 'this task';
+    if (!confirm(`Permanently delete "${name}"? This removes all completions and history and CANNOT be undone.`)) return;
+    fetch('/api/hard-delete-chore', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({chore_id: parseInt(document.getElementById('choreId').value)}),
     }).then(() => window.location.href = '/tasks');
 }
 

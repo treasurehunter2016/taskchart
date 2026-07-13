@@ -21,7 +21,7 @@
 
 {% block content %}
 <div class="page-header">
-    <span class="page-title">Chores</span>
+    <span class="page-title">Tasks</span>
     <a href="/chores/new" class="header-action">＋</a>
 </div>
 
@@ -65,16 +65,16 @@
     </div>
     {% endfor %}
     <a href="/chores/new" class="add-chore-link">
-        <span>➕</span> Create a New Chore
+        <span>➕</span> Create a New Task
     </a>
 </div>
 {% else %}
 <div class="empty-state">
     <div class="empty-state-icon">✂️</div>
-    <div class="empty-state-text">No chores yet</div>
+    <div class="empty-state-text">No tasks yet</div>
     <div style="margin-top:24px;">
         <a href="/chores/new" class="btn btn-primary" style="display:inline-flex;width:auto;padding:14px 32px;">
-            ➕ Create First Chore
+            ➕ Create First Task
         </a>
     </div>
 </div>

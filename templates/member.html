@@ -72,7 +72,7 @@
     <div class="member-avatar-lg" style="background:{{ member.color }}22;">
         {{ member.avatar }}
     </div>
-    <div class="member-name">{{ member.name }}'s Chores</div>
+    <div class="member-name">{{ member.name }}'s Tasks</div>
     <div class="member-pts">🏆 {{ points }} Points</div>
     {% if streak > 0 %}
     <div class="member-streak-row">
@@ -174,7 +174,7 @@
 {% if not today_chores and not as_needed_chores and not upcoming_chores %}
 <div class="empty-state">
     <div class="empty-state-icon">🎈</div>
-    <div class="empty-state-text">No chores assigned yet.<br>Add some in the Chores tab!</div>
+    <div class="empty-state-text">No tasks assigned yet.<br>Add some in the Tasks tab!</div>
 </div>
 {% endif %}
 {% endblock %}
@@ -218,7 +218,7 @@ function toggleCompletion(choreId, memberId, dateStr, row) {
                     banner = document.createElement('div');
                     banner.id = 'allDoneBanner';
                     banner.className = 'all-done-banner';
-                    banner.textContent = '🎉 Amazing! All chores done for today! 🎊';
+                    banner.textContent = '🎉 Amazing! All tasks done for today! 🎊';
                     document.getElementById('todaySection').after(banner);
                 }
             }
